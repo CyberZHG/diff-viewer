@@ -76,6 +76,7 @@ if(DIFF_VIEW_ENABLE_TESTS)
             tests/main.cpp
             tests/test_string_utils.cpp
             tests/test_diff_lines.cpp
+            tests/test_diff_chars.cpp
     )
 
     target_link_libraries(runTests

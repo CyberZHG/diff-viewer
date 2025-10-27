@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <grapheme_break.h>
 
 namespace diff_view {
 
@@ -224,6 +225,115 @@ DiffResult diff_lines(std::vector<std::string> old_lines, std::vector<std::strin
     const auto change_ranges = find_change_ranges(all_lines);
     const auto merged_ranges = merge_ranges(change_ranges, context_lines);
     result.hunks = build_hunks(all_lines, merged_ranges, context_lines);
+    return result;
+}
+
+namespace {
+
+/**
+ * Myers diff for grapheme clusters.
+ */
+std::vector<DiffOp> myers_diff_graphemes(const std::vector<std::string>& old_graphemes,
+                                          const std::vector<std::string>& new_graphemes) {
+    const int n = static_cast<int>(old_graphemes.size());
+    const int m = static_cast<int>(new_graphemes.size());
+    const int max_d = n + m;
+    if (max_d == 0) {
+        return {};
+    }
+    const int offset = max_d;
+    std::vector v(2 * max_d + 1, 0);
+    std::vector<std::vector<int>> trace;
+    bool found = false;
+    for (int d = 0; d <= max_d && !found; ++d) {
+        trace.push_back(v);
+        for (int k = -d; k <= d; k += 2) {
+            int x;
+            if (k == -d || (k != d && v[k - 1 + offset] < v[k + 1 + offset])) {
+                x = v[k + 1 + offset];
+            } else {
+                x = v[k - 1 + offset] + 1;
+            }
+            int y = x - k;
+            while (x < n && y < m && old_graphemes[x] == new_graphemes[y]) {
+                ++x;
+                ++y;
+            }
+            v[k + offset] = x;
+            if (x >= n && y >= m) {
+                found = true;
+                break;
+            }
+        }
+    }
+    std::vector<DiffOp> result;
+    int x = n, y = m;
+    for (int d = static_cast<int>(trace.size()) - 1; d >= 0 && (x > 0 || y > 0); --d) {
+        const auto& v_prev = trace[d];
+        const int k = x - y;
+        int prev_k;
+        if (k == -d || (k != d && v_prev[k - 1 + offset] < v_prev[k + 1 + offset])) {
+            prev_k = k + 1;
+        } else {
+            prev_k = k - 1;
+        }
+        const int prev_x = v_prev[prev_k + offset];
+        const int prev_y = prev_x - prev_k;
+        while (x > prev_x && y > prev_y) {
+            result.push_back(DiffOp::Equal);
+            --x;
+            --y;
+        }
+        if (d > 0) {
+            if (x == prev_x) {
+                result.push_back(DiffOp::Insert);
+                --y;
+            } else {
+                result.push_back(DiffOp::Delete);
+                --x;
+            }
+        }
+    }
+    std::ranges::reverse(result);
+    return result;
+}
+
+void append_to_segments(std::vector<CharDiffSegment>& segments,
+                        const DiffOp op, const std::string& text) {
+    if (!segments.empty() && segments.back().op == op) {
+        segments.back().text += text;
+    } else {
+        segments.push_back({op, text});
+    }
+}
+
+} // anonymous namespace
+
+CharDiffResult diff_chars(const std::string_view old_str, const std::string_view new_str) {
+    CharDiffResult result;
+    const auto old_graphemes = grapheme_break::segmentGraphemeClusters(std::string(old_str));
+    const auto new_graphemes = grapheme_break::segmentGraphemeClusters(std::string(new_str));
+    const auto script = myers_diff_graphemes(old_graphemes, new_graphemes);
+    size_t old_idx = 0;
+    size_t new_idx = 0;
+    for (const auto op : script) {
+        switch (op) {
+            case DiffOp::Equal:
+                append_to_segments(result.old_segments, DiffOp::Equal, old_graphemes[old_idx]);
+                append_to_segments(result.new_segments, DiffOp::Equal, new_graphemes[new_idx]);
+                ++old_idx;
+                ++new_idx;
+                break;
+            case DiffOp::Delete:
+                append_to_segments(result.old_segments, DiffOp::Delete, old_graphemes[old_idx]);
+                ++old_idx;
+                break;
+            case DiffOp::Insert:
+                append_to_segments(result.new_segments, DiffOp::Insert, new_graphemes[new_idx]);
+                ++new_idx;
+                break;
+        }
+    }
     return result;
 }
 

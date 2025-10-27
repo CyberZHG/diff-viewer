@@ -61,6 +61,25 @@ DiffResult diff_lines(std::string_view old_text, std::string_view new_text, size
  */
 DiffResult diff_lines(std::vector<std::string> old_lines, std::vector<std::string> new_lines, size_t context_lines = 3);
 
+struct CharDiffSegment {
+    DiffOp op;
+    std::string text;
+};
+
+struct CharDiffResult {
+    std::vector<CharDiffSegment> old_segments;
+    std::vector<CharDiffSegment> new_segments;
+};
+
+/**
+ * Compute character-level diff between two strings using Myers algorithm.
+ *
+ * @param old_str The original string.
+ * @param new_str The new string.
+ * @return CharDiffResult with segments for both old and new strings.
+ */
+CharDiffResult diff_chars(std::string_view old_str, std::string_view new_str);
+
 } // namespace diff_view
 
 #endif //DIFF_VIEW_DIFF_H
