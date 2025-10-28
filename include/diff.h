@@ -1,7 +1,6 @@
 #ifndef DIFF_VIEW_DIFF_H
 #define DIFF_VIEW_DIFF_H
 
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>

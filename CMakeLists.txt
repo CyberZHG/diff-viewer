@@ -51,6 +51,8 @@ add_library(DiffView STATIC
         src/string_utils.cpp
         include/diff.h
         src/diff.cpp
+        include/view_model.h
+        src/view_model.cpp
 )
 
 target_include_directories(DiffView
@@ -77,6 +79,7 @@ if(DIFF_VIEW_ENABLE_TESTS)
             tests/test_string_utils.cpp
             tests/test_diff_lines.cpp
             tests/test_diff_chars.cpp
+            tests/test_view_model.cpp
     )
 
     target_link_libraries(runTests
