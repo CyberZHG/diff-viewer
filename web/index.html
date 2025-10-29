@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diff View</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="top-banner">
+      <div class="banner-title">Diff View</div>
+      <div class="banner-controls">
+        <label class="control-label">
+          Indent:
+          <select class="control-select" id="indentSelect">
+            <option value="2">2</option>
+            <option value="4" selected>4</option>
+            <option value="8">8</option>
+          </select>
+        </label>
+        <button class="control-btn" id="wrapBtn" title="Toggle soft wrap">Wrap</button>
+        <button class="control-btn icon-btn" id="themeBtn" title="Toggle dark/light mode">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+          <svg class="icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="5"/>
+            <line x1="12" y1="1" x2="12" y2="3"/>
+            <line x1="12" y1="21" x2="12" y2="23"/>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+            <line x1="1" y1="12" x2="3" y2="12"/>
+            <line x1="21" y1="12" x2="23" y2="12"/>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="editors-container">
+      <section class="editor-panel">
+        <div class="editor-header">
+          <span>Original</span>
+          <div class="stats" id="leftStats"></div>
+        </div>
+        <div class="editor-wrapper">
+          <div class="line-numbers" id="leftLineNumbers"></div>
+          <div class="editor-content" id="leftContent">
+            <div class="editor-content-inner">
+              <div class="editor-highlight" id="leftHighlight"></div>
+              <textarea
+                id="leftEditor"
+                class="editor-textarea"
+                placeholder="Enter original text..."
+                spellcheck="false"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div class="diff-connector">
+        <div class="editor-header connector-header">&nbsp;</div>
+        <div class="connector-content">
+          <svg id="connectorSvg" class="connector-svg"></svg>
+        </div>
+      </div>
+
+      <section class="editor-panel">
+        <div class="editor-header">
+          <span>Modified</span>
+          <div class="stats" id="rightStats"></div>
+        </div>
+        <div class="editor-wrapper">
+          <div class="line-numbers" id="rightLineNumbers"></div>
+          <div class="editor-content" id="rightContent">
+            <div class="editor-content-inner">
+              <div class="editor-highlight" id="rightHighlight"></div>
+              <textarea
+                id="rightEditor"
+                class="editor-textarea"
+                placeholder="Enter modified text..."
+                spellcheck="false"
+              ></textarea>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="main.ts"></script>
+</body>
+</html>

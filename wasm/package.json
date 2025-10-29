@@ -6,9 +6,9 @@
   "types": "index.d.ts",
   "files": [
     "index.js",
-    "index.d.js",
+    "index.d.ts",
     "wasm/DiffViewWASM.js",
-    "wasm/DiffView.wasm"
+    "wasm/DiffViewWASM.wasm"
   ],
   "devDependencies": {
     "@eslint/js": "^9.39.1",
