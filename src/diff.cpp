@@ -210,6 +210,8 @@ DiffResult diff_lines(std::vector<std::string> old_lines, std::vector<std::strin
     DiffResult result;
     result.old_lines = std::move(old_lines);
     result.new_lines = std::move(new_lines);
+
+    // Compute hashes for all lines
     std::vector<uint64_t> old_hashes;
     std::vector<uint64_t> new_hashes;
     old_hashes.reserve(result.old_lines.size());
@@ -220,7 +222,59 @@ DiffResult diff_lines(std::vector<std::string> old_lines, std::vector<std::strin
     for (const auto& line : result.new_lines) {
         new_hashes.push_back(hash_string(line));
     }
-    const auto script = myers_diff(result.old_lines, result.new_lines, old_hashes, new_hashes);
+
+    // Find common prefix
+    size_t prefix_len = 0;
+    while (prefix_len < result.old_lines.size() && prefix_len < result.new_lines.size() &&
+           lines_equal(result.old_lines[prefix_len], old_hashes[prefix_len],
+                       result.new_lines[prefix_len], new_hashes[prefix_len])) {
+        ++prefix_len;
+    }
+
+    // Find common suffix (but don't overlap with prefix)
+    size_t suffix_len = 0;
+    while (suffix_len < result.old_lines.size() - prefix_len &&
+           suffix_len < result.new_lines.size() - prefix_len &&
+           lines_equal(result.old_lines[result.old_lines.size() - 1 - suffix_len],
+                       old_hashes[result.old_lines.size() - 1 - suffix_len],
+                       result.new_lines[result.new_lines.size() - 1 - suffix_len],
+                       new_hashes[result.new_lines.size() - 1 - suffix_len])) {
+        ++suffix_len;
+    }
+
+    // Build edit script with prefix/suffix optimization
+    std::vector<DiffOp> script;
+
+    // Add prefix as Equal
+    for (size_t i = 0; i < prefix_len; ++i) {
+        script.push_back(DiffOp::Equal);
+    }
+
+    // Run Myers on the middle portion
+    const size_t old_mid_start = prefix_len;
+    const size_t old_mid_end = result.old_lines.size() - suffix_len;
+    const size_t new_mid_start = prefix_len;
+    const size_t new_mid_end = result.new_lines.size() - suffix_len;
+
+    if (old_mid_start < old_mid_end || new_mid_start < new_mid_end) {
+        std::vector<std::string> old_mid(result.old_lines.begin() + old_mid_start,
+                                          result.old_lines.begin() + old_mid_end);
+        std::vector<std::string> new_mid(result.new_lines.begin() + new_mid_start,
+                                          result.new_lines.begin() + new_mid_end);
+        std::vector<uint64_t> old_mid_hashes(old_hashes.begin() + old_mid_start,
+                                              old_hashes.begin() + old_mid_end);
+        std::vector<uint64_t> new_mid_hashes(new_hashes.begin() + new_mid_start,
+                                              new_hashes.begin() + new_mid_end);
+
+        const auto mid_script = myers_diff(old_mid, new_mid, old_mid_hashes, new_mid_hashes);
+        script.insert(script.end(), mid_script.begin(), mid_script.end());
+    }
+
+    // Add suffix as Equal
+    for (size_t i = 0; i < suffix_len; ++i) {
+        script.push_back(DiffOp::Equal);
+    }
+
     const auto all_lines = build_diff_lines(script);
     const auto change_ranges = find_change_ranges(all_lines);
     const auto merged_ranges = merge_ranges(change_ranges, context_lines);
@@ -313,27 +367,58 @@ CharDiffResult diff_chars(const std::string_view old_str, const std::string_view
     CharDiffResult result;
     const auto old_graphemes = grapheme_break::segmentGraphemeClusters(std::string(old_str));
     const auto new_graphemes = grapheme_break::segmentGraphemeClusters(std::string(new_str));
-    const auto script = myers_diff_graphemes(old_graphemes, new_graphemes);
-    size_t old_idx = 0;
-    size_t new_idx = 0;
-    for (const auto op : script) {
-        switch (op) {
-            case DiffOp::Equal:
-                append_to_segments(result.old_segments, DiffOp::Equal, old_graphemes[old_idx]);
-                append_to_segments(result.new_segments, DiffOp::Equal, new_graphemes[new_idx]);
-                ++old_idx;
-                ++new_idx;
-                break;
-            case DiffOp::Delete:
-                append_to_segments(result.old_segments, DiffOp::Delete, old_graphemes[old_idx]);
-                ++old_idx;
-                break;
-            case DiffOp::Insert:
-                append_to_segments(result.new_segments, DiffOp::Insert, new_graphemes[new_idx]);
-                ++new_idx;
-                break;
+    size_t prefix_len = 0;
+    while (prefix_len < old_graphemes.size()
+        && prefix_len < new_graphemes.size()
+        && old_graphemes[prefix_len] == new_graphemes[prefix_len]) {
+        ++prefix_len;
+    }
+    size_t suffix_len = 0;
+    while (suffix_len < old_graphemes.size() - prefix_len
+        && suffix_len < new_graphemes.size() - prefix_len
+        && old_graphemes[old_graphemes.size() - 1 - suffix_len] == new_graphemes[new_graphemes.size() - 1 - suffix_len]) {
+        ++suffix_len;
+    }
+    for (size_t i = 0; i < prefix_len; ++i) {
+        append_to_segments(result.old_segments, DiffOp::Equal, old_graphemes[i]);
+        append_to_segments(result.new_segments, DiffOp::Equal, new_graphemes[i]);
+    }
+    const size_t old_mid_start = prefix_len;
+    const size_t old_mid_end = old_graphemes.size() - suffix_len;
+    const size_t new_mid_start = prefix_len;
+    const size_t new_mid_end = new_graphemes.size() - suffix_len;
+    if (old_mid_start < old_mid_end || new_mid_start < new_mid_end) {
+        const std::vector old_mid(old_graphemes.begin() + old_mid_start, old_graphemes.begin() + old_mid_end);
+        const std::vector new_mid(new_graphemes.begin() + new_mid_start, new_graphemes.begin() + new_mid_end);
+        const auto script = myers_diff_graphemes(old_mid, new_mid);
+        size_t old_idx = 0;
+        size_t new_idx = 0;
+        for (const auto op : script) {
+            switch (op) {
+                case DiffOp::Equal:
+                    append_to_segments(result.old_segments, DiffOp::Equal, old_mid[old_idx]);
+                    append_to_segments(result.new_segments, DiffOp::Equal, new_mid[new_idx]);
+                    ++old_idx;
+                    ++new_idx;
+                    break;
+                case DiffOp::Delete:
+                    append_to_segments(result.old_segments, DiffOp::Delete, old_mid[old_idx]);
+                    ++old_idx;
+                    break;
+                case DiffOp::Insert:
+                    append_to_segments(result.new_segments, DiffOp::Insert, new_mid[new_idx]);
+                    ++new_idx;
+                    break;
+            }
         }
     }
+    for (size_t i = old_graphemes.size() - suffix_len; i < old_graphemes.size(); ++i) {
+        append_to_segments(result.old_segments, DiffOp::Equal, old_graphemes[i]);
+    }
+    for (size_t i = new_graphemes.size() - suffix_len; i < new_graphemes.size(); ++i) {
+        append_to_segments(result.new_segments, DiffOp::Equal, new_graphemes[i]);
+    }
+
     return result;
 }
 

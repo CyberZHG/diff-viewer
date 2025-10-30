@@ -1,5 +1,5 @@
 // @ts-ignore
-import { init, createViewModel, processViewModel, LineKind, type ProcessedViewModel, type ProcessedLine, type Connector } from '../wasm/index.js';
+import { init, createViewModel, processViewModel, LineKind, type ProcessedViewModel, type ProcessedLine, type InlineHighlight } from '../wasm/index.js';
 
 interface Elements {
   leftEditor: HTMLTextAreaElement;
@@ -28,17 +28,19 @@ interface State {
   resizeTimeout: number | null;
 }
 
+interface ConnectorBlock {
+  type: 'added' | 'removed' | 'modified';
+  startIndex: number;
+  endIndex: number;
+}
+
 const LINE_HEIGHT = 20;
 const PADDING_TOP = 8;
 const SVG_WIDTH = 48;
 
-const SAMPLE_OLD = `aaa
-bcb
-ddd`;
+const SAMPLE_OLD = ``;
 
-const SAMPLE_NEW = `aaa
-bbb
-ddd`;
+const SAMPLE_NEW = ``;
 
 class DiffEditor {
   private el: Elements;
@@ -95,8 +97,8 @@ class DiffEditor {
   }
 
   private bindEvents(): void {
-    this.el.leftEditor.addEventListener('input', () => this.updateDiff());
-    this.el.rightEditor.addEventListener('input', () => this.updateDiff());
+    this.el.leftEditor.addEventListener('input', () => this.onLeftInput());
+    this.el.rightEditor.addEventListener('input', () => this.onRightInput());
     this.el.leftEditor.addEventListener('keydown', (e) => this.handleKeyDown(e, this.el.leftEditor));
     this.el.rightEditor.addEventListener('keydown', (e) => this.handleKeyDown(e, this.el.rightEditor));
     this.el.leftContent.addEventListener('scroll', () => this.handleLeftScroll());
@@ -115,6 +117,14 @@ class DiffEditor {
         this.drawConnectors();
       }, 100);
     });
+  }
+
+  private onLeftInput(): void {
+    this.updateDiff();
+  }
+
+  private onRightInput(): void {
+    this.updateDiff();
   }
 
   private toggleTheme(): void {
@@ -303,25 +313,44 @@ class DiffEditor {
     highlight.classList.add('visible');
     editor.classList.add('has-highlights');
 
-    const htmlParts: string[] = [];
-    let first = true;
-
+    // Build a map from lineNo to line info for quick lookup
+    const lineMap = new Map<number, { line: ProcessedLine; lineClass: string; highlights: InlineHighlight[] }>();
     for (const line of result.lines) {
-      const info = isLeft ? line.left : line.right;
+      const leftInfo = line.left;
+      const rightInfo = line.right;
+      const info = isLeft ? leftInfo : rightInfo;
+
       if (info.kind === LineKind.Blank) continue;
 
-      if (!first) htmlParts.push('\n');
-      first = false;
+      const lineClass = this.getLineClass(leftInfo.kind, rightInfo.kind, isLeft);
+      const isModifiedPair = leftInfo.kind === LineKind.Removed && rightInfo.kind === LineKind.Added;
+      const lineHighlights = isModifiedPair
+        ? result.highlights.filter(h => h.row === line.index && h.isLeft === isLeft)
+        : [];
 
-      const lineClass = this.getLineClass(info.kind);
-      const lineHighlights = result.highlights.filter(h => h.row === line.index && h.isLeft === isLeft);
+      lineMap.set(info.lineNo, { line, lineClass, highlights: lineHighlights });
+    }
+
+    // Render based on ACTUAL textarea content order, not diff result order
+    const textareaLines = editor.value.split('\n');
+    const htmlParts: string[] = [];
+
+    for (let i = 0; i < textareaLines.length; i++) {
+      const lineNo = i + 1; // 1-indexed
+      const content = textareaLines[i];
+
+      if (i > 0) htmlParts.push('\n');
+
+      const lineInfo = lineMap.get(lineNo);
+      const lineClass = lineInfo?.lineClass ?? '';
+      const lineHighlights = lineInfo?.highlights ?? [];
 
       htmlParts.push(`<span class="hl-line ${lineClass}">`);
 
       if (lineHighlights.length > 0) {
-        htmlParts.push(this.renderCharHighlights(info.content, lineHighlights, isLeft));
+        htmlParts.push(this.renderCharHighlights(content, lineHighlights, isLeft));
       } else {
-        htmlParts.push(this.escapeHtml(info.content));
+        htmlParts.push(this.escapeHtml(content));
       }
 
       htmlParts.push('</span>');
@@ -330,9 +359,30 @@ class DiffEditor {
     highlight.innerHTML = htmlParts.join('');
   }
 
+  private getLineClass(leftKind: number, rightKind: number, isLeft: boolean): string {
+    // Modified pair: both sides are non-blank and different
+    if (leftKind === LineKind.Removed && rightKind === LineKind.Added) {
+      return 'hl-modified';
+    }
+
+    if (isLeft) {
+      // Left side: only show red for pure deletions
+      if (leftKind === LineKind.Removed && rightKind === LineKind.Blank) {
+        return 'hl-removed';
+      }
+    } else {
+      // Right side: only show green for pure additions
+      if (rightKind === LineKind.Added && leftKind === LineKind.Blank) {
+        return 'hl-added';
+      }
+    }
+
+    return '';
+  }
+
   private renderCharHighlights(
     content: string,
-    highlights: ProcessedViewModel['highlights'],
+    highlights: InlineHighlight[],
     isLeft: boolean
   ): string {
     const sorted = [...highlights].sort((a, b) => a.start - b.start);
@@ -353,14 +403,6 @@ class DiffEditor {
     }
 
     return parts.join('');
-  }
-
-  private getLineClass(kind: number): string {
-    switch (kind) {
-      case LineKind.Added: return 'hl-added';
-      case LineKind.Removed: return 'hl-removed';
-      default: return '';
-    }
   }
 
   private escapeHtml(text: string): string {
@@ -393,6 +435,89 @@ class DiffEditor {
     this.el.rightStats.innerHTML = added > 0 ? `<span class="stat-added">+${added}</span>` : '';
   }
 
+  private buildConnectorBlocks(lines: ProcessedLine[]): ConnectorBlock[] {
+    const blocks: ConnectorBlock[] = [];
+    const rightUsed = new Set<number>();
+
+    // First pass: collect removed and modified blocks from left side
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const leftKind = line.left.kind;
+      const rightKind = line.right.kind;
+
+      if (leftKind === LineKind.Context || leftKind === LineKind.Blank) {
+        if (leftKind === LineKind.Context) rightUsed.add(i);
+        i++;
+        continue;
+      }
+
+      if (leftKind === LineKind.Removed) {
+        const isModified = rightKind === LineKind.Added;
+        const blockType = isModified ? 'modified' : 'removed';
+        const startIndex = i;
+        let endIndex = i;
+
+        // Collect consecutive lines of the same type
+        while (endIndex + 1 < lines.length) {
+          const nextLine = lines[endIndex + 1];
+          const nextLeftKind = nextLine.left.kind;
+          const nextRightKind = nextLine.right.kind;
+          const nextIsModified = nextLeftKind === LineKind.Removed && nextRightKind === LineKind.Added;
+          const nextIsPureRemoved = nextLeftKind === LineKind.Removed && nextRightKind === LineKind.Blank;
+
+          if ((blockType === 'modified' && nextIsModified) ||
+              (blockType === 'removed' && nextIsPureRemoved)) {
+            endIndex++;
+          } else {
+            break;
+          }
+        }
+
+        // Mark right side as used (except for pure added lines)
+        for (let idx = startIndex; idx <= endIndex; idx++) {
+          if (lines[idx].right.kind !== LineKind.Added || lines[idx].left.kind === LineKind.Removed) {
+            rightUsed.add(idx);
+          }
+        }
+
+        blocks.push({ type: blockType, startIndex, endIndex });
+        i = endIndex + 1;
+      } else {
+        i++;
+      }
+    }
+
+    // Second pass: collect remaining added blocks from right side
+    i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+
+      if (!rightUsed.has(i) && line.right.kind === LineKind.Added && line.left.kind === LineKind.Blank) {
+        const startIndex = i;
+        let endIndex = i;
+
+        while (endIndex + 1 < lines.length) {
+          const nextLine = lines[endIndex + 1];
+          if (!rightUsed.has(endIndex + 1) &&
+              nextLine.right.kind === LineKind.Added &&
+              nextLine.left.kind === LineKind.Blank) {
+            endIndex++;
+          } else {
+            break;
+          }
+        }
+
+        blocks.push({ type: 'added', startIndex, endIndex });
+        i = endIndex + 1;
+      } else {
+        i++;
+      }
+    }
+
+    return blocks;
+  }
+
   private drawConnectors(): void {
     const result = this.state.diffResult;
     if (!result) return;
@@ -405,39 +530,103 @@ class DiffEditor {
     this.el.connectorSvg.setAttribute('width', String(SVG_WIDTH));
     this.el.connectorSvg.setAttribute('height', String(viewportHeight));
     this.el.connectorSvg.setAttribute('viewBox', `0 0 ${SVG_WIDTH} ${viewportHeight}`);
+    this.el.connectorSvg.setAttribute('preserveAspectRatio', 'none');
 
     const leftScroll = this.el.leftContent.scrollTop;
     const rightScroll = this.el.rightContent.scrollTop;
 
-    for (const conn of result.connectors) {
-      this.drawConnector(conn, leftScroll, rightScroll, viewportHeight, result.lines);
+    const blocks = this.buildConnectorBlocks(result.lines);
+
+    for (const block of blocks) {
+      this.drawConnectorBlock(block, result.lines, leftScroll, rightScroll, viewportHeight);
     }
   }
 
-  private drawConnector(
-    conn: Connector,
+  private drawConnectorBlock(
+    block: ConnectorBlock,
+    lines: ProcessedLine[],
     leftScroll: number,
     rightScroll: number,
-    viewportHeight: number,
-    lines: ProcessedLine[]
+    viewportHeight: number
   ): void {
-    const leftTopRow = this.getDisplayRow(lines, conn.top, true);
-    const leftBottomRow = this.getDisplayRow(lines, conn.bottom, true);
-    const rightTopRow = this.getDisplayRow(lines, conn.top, false);
-    const rightBottomRow = this.getDisplayRow(lines, conn.bottom, false);
+    // Find display positions for left and right sides
+    const leftPositions = this.getBlockDisplayPositions(lines, block, true);
+    const rightPositions = this.getBlockDisplayPositions(lines, block, false);
 
-    const leftTop = PADDING_TOP + leftTopRow * LINE_HEIGHT - leftScroll;
-    const leftBottom = PADDING_TOP + (leftBottomRow + 1) * LINE_HEIGHT - leftScroll;
-    const rightTop = PADDING_TOP + rightTopRow * LINE_HEIGHT - rightScroll;
-    const rightBottom = PADDING_TOP + (rightBottomRow + 1) * LINE_HEIGHT - rightScroll;
+    let leftStartY: number, leftEndY: number, rightStartY: number, rightEndY: number;
 
-    const minY = Math.min(leftTop, rightTop);
-    const maxY = Math.max(leftBottom, rightBottom);
+    if (block.type === 'added') {
+      // Pure addition: left side is a single insertion point
+      const insertionPos = this.getDisplayPosition(lines, block.startIndex, true);
+      leftStartY = PADDING_TOP + insertionPos * LINE_HEIGHT - leftScroll;
+      leftEndY = leftStartY;
+      rightStartY = PADDING_TOP + rightPositions.start * LINE_HEIGHT - rightScroll;
+      rightEndY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
+    } else if (block.type === 'removed') {
+      // Pure removal: right side is a single deletion point
+      const deletionPos = this.getDisplayPosition(lines, block.startIndex, false);
+      leftStartY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
+      leftEndY = PADDING_TOP + (leftPositions.end + 1) * LINE_HEIGHT - leftScroll;
+      rightStartY = PADDING_TOP + deletionPos * LINE_HEIGHT - rightScroll;
+      rightEndY = rightStartY;
+    } else {
+      // Modified: both sides have content
+      leftStartY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
+      leftEndY = PADDING_TOP + (leftPositions.end + 1) * LINE_HEIGHT - leftScroll;
+      rightStartY = PADDING_TOP + rightPositions.start * LINE_HEIGHT - rightScroll;
+      rightEndY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
+    }
+
+    // Check if visible
+    const minY = Math.min(leftStartY, rightStartY);
+    const maxY = Math.max(leftEndY, rightEndY);
     if (maxY < 0 || minY > viewportHeight) return;
 
-    const type = this.getConnectorType(conn, lines);
-    const color = this.getConnectorColor(type);
+    this.drawConnectorShape(leftStartY, leftEndY, rightStartY, rightEndY, block.type);
+  }
 
+  private getBlockDisplayPositions(
+    lines: ProcessedLine[],
+    block: ConnectorBlock,
+    isLeft: boolean
+  ): { start: number; end: number } {
+    let start = -1;
+    let end = -1;
+
+    for (let i = block.startIndex; i <= block.endIndex; i++) {
+      const info = isLeft ? lines[i].left : lines[i].right;
+      if (info.kind !== LineKind.Blank) {
+        const displayPos = this.getDisplayPosition(lines, i, isLeft);
+        if (start === -1) start = displayPos;
+        end = displayPos;
+      }
+    }
+
+    // If no content on this side, use the insertion point
+    if (start === -1) {
+      start = end = this.getDisplayPosition(lines, block.startIndex, isLeft);
+    }
+
+    return { start, end };
+  }
+
+  private getDisplayPosition(lines: ProcessedLine[], index: number, isLeft: boolean): number {
+    let pos = 0;
+    for (let i = 0; i < index && i < lines.length; i++) {
+      const info = isLeft ? lines[i].left : lines[i].right;
+      if (info.kind !== LineKind.Blank) pos++;
+    }
+    return pos;
+  }
+
+  private drawConnectorShape(
+    leftTop: number,
+    leftBottom: number,
+    rightTop: number,
+    rightBottom: number,
+    type: 'added' | 'removed' | 'modified'
+  ): void {
+    const color = this.getConnectorColor(type);
     const cp1x = SVG_WIDTH * 0.4;
     const cp2x = SVG_WIDTH * 0.6;
 
@@ -462,32 +651,12 @@ class DiffEditor {
     this.el.connectorSvg.appendChild(bottomBorder);
   }
 
-  private getDisplayRow(lines: ProcessedLine[], viewRow: number, isLeft: boolean): number {
-    let displayRow = 0;
-    for (let i = 0; i < viewRow && i < lines.length; i++) {
-      const info = isLeft ? lines[i].left : lines[i].right;
-      if (info.kind !== LineKind.Blank) displayRow++;
-    }
-    return displayRow;
-  }
-
-  private getConnectorType(conn: Connector, lines: ProcessedLine[]): 'added' | 'removed' | 'modified' {
-    let hasAdded = false, hasRemoved = false;
-    for (let i = conn.top; i <= conn.bottom && i < lines.length; i++) {
-      if (lines[i].left.kind === LineKind.Removed) hasRemoved = true;
-      if (lines[i].right.kind === LineKind.Added) hasAdded = true;
-    }
-    if (hasAdded && hasRemoved) return 'modified';
-    if (hasAdded) return 'added';
-    return 'removed';
-  }
-
   private getConnectorColor(type: 'added' | 'removed' | 'modified'): string {
     const style = getComputedStyle(document.documentElement);
     switch (type) {
-      case 'added': return style.getPropertyValue('--connector-added').trim();
-      case 'removed': return style.getPropertyValue('--connector-removed').trim();
-      default: return style.getPropertyValue('--connector-modified').trim();
+      case 'added': return style.getPropertyValue('--color-connector-added').trim();
+      case 'removed': return style.getPropertyValue('--color-connector-removed').trim();
+      default: return style.getPropertyValue('--color-connector-modified').trim();
     }
   }
 

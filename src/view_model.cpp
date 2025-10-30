@@ -9,12 +9,43 @@ namespace diff_view {
 
 namespace {
 
+constexpr double SIMILARITY_THRESHOLD = 0.5;
+
 size_t grapheme_to_byte_offset(const std::vector<std::string>& graphemes, const size_t grapheme_idx) {
     size_t offset = 0;
     for (size_t i = 0; i < grapheme_idx && i < graphemes.size(); ++i) {
         offset += graphemes[i].size();
     }
     return offset;
+}
+
+/**
+ * Calculate similarity ratio between two lines based on character diff.
+ * Returns a value between 0.0 (completely different) and 1.0 (identical).
+ */
+double calculate_similarity(const CharDiffResult& diff_result) {
+    size_t equal_chars = 0;
+    size_t total_old_chars = 0;
+    size_t total_new_chars = 0;
+
+    for (const auto& [op, text] : diff_result.old_segments) {
+        const size_t len = text.size();
+        total_old_chars += len;
+        if (op == DiffOp::Equal) {
+            equal_chars += len;
+        }
+    }
+
+    for (const auto& [op, text] : diff_result.new_segments) {
+        total_new_chars += text.size();
+    }
+
+    const size_t total_chars = std::max(total_old_chars, total_new_chars);
+    if (total_chars == 0) {
+        return 1.0;
+    }
+
+    return static_cast<double>(equal_chars) / static_cast<double>(total_chars);
 }
 
 } // namespace
@@ -59,8 +90,8 @@ ViewModel create_view_model(const std::string& old_text, const std::string& new_
                 insert_indices.push_back(new_index);
             }
         }
-        std::set<size_t> paired_inserts;
         size_t pair_count = std::min(delete_indices.size(), insert_indices.size());
+        std::set<size_t> paired_inserts;
         for (size_t i = 0; i < pair_count; ++i) {
             paired_inserts.insert(insert_indices[i]);
         }
@@ -74,45 +105,17 @@ ViewModel create_view_model(const std::string& old_text, const std::string& new_
                 old_pos = old_index + 1;
                 new_pos = new_index + 1;
             } else if (op == DiffOp::Delete) {
-                auto row_idx = static_cast<uint32_t>(vm.lines.size());
                 auto line_no = static_cast<uint32_t>(old_index + 1);
-                if (left_start == 0) left_start = line_no;
+                if (left_start == 0) {
+                    left_start = line_no;
+                }
                 left_end = line_no;
                 if (del_i < insert_indices.size()) {
                     size_t ins_idx = insert_indices[del_i];
-                    auto [old_segments, new_segments] = diff_chars(vm.old_lines[old_index], vm.new_lines[ins_idx]);
-                    auto old_graphemes = grapheme_break::segmentGraphemeClusters(vm.old_lines[old_index]);
-                    auto new_graphemes = grapheme_break::segmentGraphemeClusters(vm.new_lines[ins_idx]);
-                    size_t grapheme_pos = 0;
-                    for (const auto& [seg_op, text] : old_segments) {
-                        size_t seg_len = grapheme_break::segmentGraphemeClusters(text).size();
-                        if (seg_op == DiffOp::Delete) {
-                            vm.highlights.push_back({
-                                row_idx,
-                                static_cast<uint32_t>(grapheme_to_byte_offset(old_graphemes, grapheme_pos)),
-                                static_cast<uint32_t>(grapheme_to_byte_offset(old_graphemes, grapheme_pos + seg_len)),
-                                true
-                            });
-                        }
-                        grapheme_pos += seg_len;
-                    }
                     vm.lines.push_back({
                         {LineKind::Removed, line_no},
                         {LineKind::Added, static_cast<uint32_t>(ins_idx + 1)}
                     });
-                    grapheme_pos = 0;
-                    for (const auto& [seg_op, text] : new_segments) {
-                        size_t seg_len = grapheme_break::segmentGraphemeClusters(text).size();
-                        if (seg_op == DiffOp::Insert) {
-                            vm.highlights.push_back({
-                                row_idx,
-                                static_cast<uint32_t>(grapheme_to_byte_offset(new_graphemes, grapheme_pos)),
-                                static_cast<uint32_t>(grapheme_to_byte_offset(new_graphemes, grapheme_pos + seg_len)),
-                                false
-                            });
-                        }
-                        grapheme_pos += seg_len;
-                    }
                     if (right_start == 0) {
                         right_start = static_cast<uint32_t>(ins_idx + 1);
                     }
@@ -139,6 +142,54 @@ ViewModel create_view_model(const std::string& old_text, const std::string& new_
                     {LineKind::Added, line_no}
                 });
                 new_pos = new_index + 1;
+            }
+        }
+        if (vm.lines.size() > connector_top) {
+            std::sort(vm.lines.begin() + connector_top, vm.lines.end(),
+                [](const ViewLine& a, const ViewLine& b) {
+                    const uint32_t a_key = (a.right.kind != LineKind::Blank) ? a.right.line_no : a.left.line_no;
+                    const uint32_t b_key = (b.right.kind != LineKind::Blank) ? b.right.line_no : b.left.line_no;
+                    return a_key < b_key;
+                });
+        }
+        for (size_t row_idx = connector_top; row_idx < vm.lines.size(); ++row_idx) {
+            const auto&[left, right] = vm.lines[row_idx];
+            if (left.kind == LineKind::Removed && right.kind == LineKind::Added) {
+                size_t old_idx = left.line_no - 1;
+                size_t new_idx = right.line_no - 1;
+                auto [old_segments, new_segments] = diff_chars(vm.old_lines[old_idx], vm.new_lines[new_idx]);
+                double similarity = calculate_similarity({old_segments, new_segments});
+
+                if (similarity >= SIMILARITY_THRESHOLD) {
+                    auto old_graphemes = grapheme_break::segmentGraphemeClusters(vm.old_lines[old_idx]);
+                    auto new_graphemes = grapheme_break::segmentGraphemeClusters(vm.new_lines[new_idx]);
+                    size_t grapheme_pos = 0;
+                    for (const auto& [seg_op, text] : old_segments) {
+                        size_t seg_len = grapheme_break::segmentGraphemeClusters(text).size();
+                        if (seg_op == DiffOp::Delete) {
+                            vm.highlights.push_back({
+                                static_cast<uint32_t>(row_idx),
+                                static_cast<uint32_t>(grapheme_to_byte_offset(old_graphemes, grapheme_pos)),
+                                static_cast<uint32_t>(grapheme_to_byte_offset(old_graphemes, grapheme_pos + seg_len)),
+                                true
+                            });
+                        }
+                        grapheme_pos += seg_len;
+                    }
+                    grapheme_pos = 0;
+                    for (const auto& [seg_op, text] : new_segments) {
+                        size_t seg_len = grapheme_break::segmentGraphemeClusters(text).size();
+                        if (seg_op == DiffOp::Insert) {
+                            vm.highlights.push_back({
+                                static_cast<uint32_t>(row_idx),
+                                static_cast<uint32_t>(grapheme_to_byte_offset(new_graphemes, grapheme_pos)),
+                                static_cast<uint32_t>(grapheme_to_byte_offset(new_graphemes, grapheme_pos + seg_len)),
+                                false
+                            });
+                        }
+                        grapheme_pos += seg_len;
+                    }
+                }
             }
         }
         if (auto connector_bottom = static_cast<uint32_t>(vm.lines.size() - 1); connector_bottom >= connector_top) {

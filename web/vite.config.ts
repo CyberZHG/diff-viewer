@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
-    base: "/diff-view",
+    base: "/diff-viewer",
     plugins: [
         tailwindcss(),
     ],
