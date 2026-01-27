@@ -4,13 +4,35 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Diff Viewer</title>
+  <meta name="description" content="A web-based diff viewer tool.">
   <link rel="stylesheet" href="/src/style.css">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://cyberzhg.github.io/diff-viewer/">
+  <meta name="msvalidate.01" content="900BFBEC9CA24BE1B56B696EF1CE3B2E" />
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "Diff Viewer",
+      "description": "A web-based diff viewer tool.",
+      "url": "https://cyberzhg.github.io/diff-viewer",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Any",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+  </script>
 </head>
 <body>
   <div id="app">
     <header class="top-banner">
-      <div class="banner-title">Diff Viewer</div>
+      <div class="banner-title">
+        <a href="https://github.com/CyberZHG/diff-viewer">Diff Viewer</a>
+        <img src="https://visitor-badge.laobi.icu/badge?page_id=cyberzhg.diff-viewer" style="display: none" alt="visitors"/>
+      </div>
       <div class="banner-controls">
         <label class="control-label">
           Indent:
@@ -93,5 +115,12 @@
   </div>
 
   <script type="module" src="src/main.ts"></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-Y0JN2M2C36"></script>
+  <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-Y0JN2M2C36');
+  </script>
 </body>
 </html>
