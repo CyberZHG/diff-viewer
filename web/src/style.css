@@ -21,6 +21,10 @@
   --color-connector-added: #2ea043;
   --color-connector-removed: #f85149;
   --color-connector-modified: #d29922;
+  --color-tab-active: #0d1117;
+  --color-tab-hover: #1c2128;
+  --color-drop-zone: rgba(88, 166, 255, 0.2);
+  --color-drop-border: #58a6ff;
 }
 
 /* Light mode overrides */
@@ -44,6 +48,10 @@
   --color-connector-added: #1a7f37;
   --color-connector-removed: #cf222e;
   --color-connector-modified: #9a6700;
+  --color-tab-active: #ffffff;
+  --color-tab-hover: #eaeef2;
+  --color-drop-zone: rgba(9, 105, 218, 0.1);
+  --color-drop-border: #0969da;
 }
 
 * {
@@ -70,6 +78,15 @@ body {
 
 .banner-title {
   @apply text-base font-semibold;
+}
+
+.banner-title a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.banner-title a:hover {
+  text-decoration: underline;
 }
 
 .banner-controls {
@@ -147,6 +164,127 @@ body {
   @apply flex-1 flex flex-col overflow-hidden;
 }
 
+/* Tab Bar */
+.tab-bar {
+  @apply flex items-center h-9 px-1;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.connector-tab-spacer {
+  @apply h-9;
+}
+
+.tab-container {
+  @apply flex-1 flex items-center gap-0.5 overflow-x-auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tab-container::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  @apply flex items-center gap-1 px-3 py-1.5 text-xs cursor-pointer rounded-t-md whitespace-nowrap;
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid transparent;
+  border-bottom: none;
+  min-width: 100px;
+  max-width: 250px;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.tab:hover {
+  background: var(--color-tab-hover);
+  color: var(--color-text-primary);
+}
+
+.tab.active {
+  background: var(--color-tab-active);
+  color: var(--color-text-primary);
+  border-color: var(--color-border);
+  position: relative;
+}
+
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--color-tab-active);
+}
+
+.tab-name {
+  @apply flex-1 overflow-hidden text-ellipsis;
+}
+
+.tab-name-input {
+  @apply w-full bg-transparent border-none outline-none text-xs;
+  color: inherit;
+  padding: 0;
+  min-width: 40px;
+}
+
+.tab-close {
+  @apply flex items-center justify-center w-4 h-4 rounded opacity-0 transition-opacity;
+  color: var(--color-text-muted);
+}
+
+.tab-close:hover {
+  background: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+.tab:hover .tab-close,
+.tab.active .tab-close {
+  opacity: 1;
+}
+
+.tab-close svg {
+  @apply w-3 h-3;
+}
+
+.tab-scroll-btn {
+  @apply flex items-center justify-center w-6 h-6 rounded cursor-pointer opacity-60 transition-opacity;
+  background: transparent;
+  border: none;
+  color: var(--color-text-secondary);
+}
+
+.tab-scroll-btn:hover {
+  opacity: 1;
+  background: var(--color-tab-hover);
+}
+
+.tab-scroll-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.tab-scroll-btn svg {
+  @apply w-4 h-4;
+}
+
+.tab-add-btn {
+  @apply flex items-center justify-center w-6 h-6 rounded cursor-pointer transition-all;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+}
+
+.tab-add-btn:hover {
+  background: var(--color-tab-hover);
+  color: var(--color-text-primary);
+}
+
+.tab-add-btn svg {
+  @apply w-4 h-4;
+}
+
 .editor-header {
   @apply px-4 py-2 text-sm font-medium flex items-center justify-between;
   background: var(--color-bg-secondary);
@@ -155,6 +293,24 @@ body {
 
 .editor-wrapper {
   @apply flex-1 flex overflow-hidden relative;
+}
+
+/* Drop Zone Overlay */
+.editor-wrapper.drag-over::before {
+  content: 'Drop file here';
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-drop-zone);
+  border: 2px dashed var(--color-drop-border);
+  border-radius: 4px;
+  z-index: 10;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-caret);
+  pointer-events: none;
 }
 
 /* Line Numbers */
@@ -229,6 +385,47 @@ body {
   @apply block;
 }
 
+/* Editor Actions */
+.editor-actions {
+  @apply flex items-center gap-2 px-3 py-2;
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+}
+
+.connector-actions-spacer {
+  background: var(--color-bg-tertiary);
+  border-top: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border);
+  border-right: 1px solid var(--color-border);
+}
+
+.editor-actions,
+.connector-actions-spacer {
+  min-height: 47px;
+  background: var(--color-bg-secondary);
+}
+
+.action-btn {
+  @apply flex items-center gap-1.5 px-2.5 py-1.5 text-xs cursor-pointer rounded-md transition-all duration-200;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+.action-btn:hover {
+  background: var(--color-bg-tertiary);
+  border-color: var(--color-border-hover);
+  color: var(--color-text-primary);
+}
+
+.action-btn svg {
+  @apply w-3.5 h-3.5;
+}
+
+.hidden-file-input {
+  @apply hidden;
+}
+
 /* Highlight Lines */
 .hl-line {
   @apply inline;
@@ -264,6 +461,7 @@ body {
   border-left: 1px solid var(--color-border);
   border-right: 1px solid var(--color-border);
 }
+
 
 .connector-header {
   @apply min-h-0;

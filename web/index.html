@@ -3,26 +3,115 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Diff Viewer</title>
-  <meta name="description" content="A web-based diff viewer tool.">
-  <link rel="stylesheet" href="/src/style.css">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+  <!-- Primary Meta Tags -->
+  <title>Diff Viewer - Online Text Comparison Tool</title>
+  <meta name="title" content="Diff Viewer - Online Text Comparison Tool">
+  <meta name="description" content="Online diff viewer to compare text and code files side by side. Highlights additions, deletions, and modifications with character-level diff. No upload required - works entirely in your browser.">
+  <meta name="keywords" content="diff viewer, text compare, file comparison, code diff, online diff tool, side by side comparison, text difference, compare files, diff checker, code comparison">
+
+  <!-- Canonical URL -->
   <link rel="canonical" href="https://cyberzhg.github.io/diff-viewer/">
-  <meta name="msvalidate.01" content="900BFBEC9CA24BE1B56B696EF1CE3B2E" />
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://cyberzhg.github.io/diff-viewer/">
+  <meta property="og:title" content="Diff Viewer - Online Text Comparison Tool">
+  <meta property="og:description" content="Compare text and code files side by side with highlighted differences. Works entirely in your browser.">
+  <meta property="og:site_name" content="Diff Viewer">
+  <meta property="og:locale" content="en_US">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:url" content="https://cyberzhg.github.io/diff-viewer/">
+  <meta name="twitter:title" content="Diff Viewer - Online Text Comparison Tool">
+  <meta name="twitter:description" content="Compare text and code files side by side with highlighted differences. Works entirely in your browser.">
+
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#0d1117" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="color-scheme" content="dark light">
+
+  <!-- Icons -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+
+  <!-- Bing Webmaster -->
+  <meta name="msvalidate.01" content="900BFBEC9CA24BE1B56B696EF1CE3B2E">
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="/src/style.css">
+
+  <!-- Structured Data -->
   <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "Diff Viewer",
-      "description": "A web-based diff viewer tool.",
+      "alternateName": "Online Diff Tool",
+      "description": "Online diff viewer to compare text and code files side by side. Highlights additions, deletions, and modifications with character-level diff.",
       "url": "https://cyberzhg.github.io/diff-viewer",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Any",
+      "browserRequirements": "Requires JavaScript. Requires HTML5.",
+      "softwareVersion": "1.0",
+      "author": {
+        "@type": "Person",
+        "name": "CyberZHG",
+        "url": "https://github.com/CyberZHG"
+      },
       "offers": {
         "@type": "Offer",
         "price": "0",
         "priceCurrency": "USD"
+      },
+      "featureList": [
+        "Side-by-side text comparison",
+        "Character-level diff highlighting",
+        "Multiple tabs support",
+        "Dark and light themes",
+        "Drag and drop file upload",
+        "Local storage persistence",
+        "No server upload required"
+      ],
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "5",
+        "ratingCount": "1"
       }
+    }
+  </script>
+
+  <!-- FAQ Structured Data -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What is Diff Viewer?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Diff Viewer is an online tool that allows you to compare two text files or code snippets side by side, highlighting the differences including additions, deletions, and modifications."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is my data safe with Diff Viewer?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, Diff Viewer runs entirely in your browser. Your files and text are never uploaded to any server. All processing happens locally on your device."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I save my comparisons?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes, you can save your text to browser local storage, download as files, or use multiple tabs to organize different comparisons."
+          }
+        }
+      ]
     }
   </script>
 </head>
@@ -42,6 +131,7 @@
             <option value="8">8</option>
           </select>
         </label>
+        <button class="control-btn active" id="connectorBtn" title="Toggle connector lines">Connector</button>
         <button class="control-btn" id="wrapBtn" title="Toggle soft wrap">Wrap</button>
         <button class="control-btn icon-btn" id="themeBtn" title="Toggle dark/light mode">
           <svg class="icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -64,6 +154,25 @@
 
     <main class="editors-container">
       <section class="editor-panel">
+        <div class="tab-bar" id="leftTabBar">
+          <button class="tab-scroll-btn tab-scroll-left" id="leftTabScrollLeft" title="Scroll left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <div class="tab-container" id="leftTabContainer"></div>
+          <button class="tab-scroll-btn tab-scroll-right" id="leftTabScrollRight" title="Scroll right">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+          <button class="tab-add-btn" id="leftTabAdd" title="Add new tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </div>
         <div class="editor-header">
           <span>Original</span>
           <div class="stats" id="leftStats"></div>
@@ -82,16 +191,71 @@
             </div>
           </div>
         </div>
+        <div class="editor-actions">
+          <button class="action-btn" id="leftSave" title="Save to browser storage">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Save
+          </button>
+          <button class="action-btn" id="leftDownload" title="Download as file">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download
+          </button>
+          <button class="action-btn" id="leftUpload" title="Upload from file">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Upload
+          </button>
+          <button class="action-btn" id="leftClear" title="Clear content">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            Clear
+          </button>
+          <input type="file" id="leftFileInput" class="hidden-file-input" accept="*/*">
+        </div>
       </section>
 
-      <div class="diff-connector">
+      <div class="diff-connector" id="diffConnector">
+        <div class="tab-bar connector-tab-spacer"></div>
         <div class="editor-header connector-header">&nbsp;</div>
         <div class="connector-content">
           <svg id="connectorSvg" class="connector-svg"></svg>
         </div>
+        <div class="editor-actions connector-actions-spacer"></div>
       </div>
 
       <section class="editor-panel">
+        <div class="tab-bar" id="rightTabBar">
+          <button class="tab-scroll-btn tab-scroll-left" id="rightTabScrollLeft" title="Scroll left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+          <div class="tab-container" id="rightTabContainer"></div>
+          <button class="tab-scroll-btn tab-scroll-right" id="rightTabScrollRight" title="Scroll right">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </button>
+          <button class="tab-add-btn" id="rightTabAdd" title="Add new tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        </div>
         <div class="editor-header">
           <span>Modified</span>
           <div class="stats" id="rightStats"></div>
@@ -109,6 +273,40 @@
               ></textarea>
             </div>
           </div>
+        </div>
+        <div class="editor-actions">
+          <button class="action-btn" id="rightSave" title="Save to browser storage">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            Save
+          </button>
+          <button class="action-btn" id="rightDownload" title="Download as file">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download
+          </button>
+          <button class="action-btn" id="rightUpload" title="Upload from file">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            Upload
+          </button>
+          <button class="action-btn" id="rightClear" title="Clear content">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            Clear
+          </button>
+          <input type="file" id="rightFileInput" class="hidden-file-input" accept="*/*">
         </div>
       </section>
     </main>

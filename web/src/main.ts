@@ -1,6 +1,20 @@
 // @ts-ignore
 import { init, createViewModel, processViewModel, LineKind, type ProcessedViewModel, type ProcessedLine, type InlineHighlight } from '../../wasm/index.js';
 
+interface TabData {
+  id: string;
+  name: string;
+  content: string;
+  savedContent: string | null;
+}
+
+interface StorageData {
+  leftTabs: TabData[];
+  rightTabs: TabData[];
+  leftActiveTab: string;
+  rightActiveTab: string;
+}
+
 interface Elements {
   leftEditor: HTMLTextAreaElement;
   rightEditor: HTMLTextAreaElement;
@@ -14,18 +28,45 @@ interface Elements {
   rightStats: HTMLDivElement;
   connectorSvg: SVGSVGElement;
   connectorContent: HTMLDivElement;
+  diffConnector: HTMLDivElement;
   wrapBtn: HTMLButtonElement;
   themeBtn: HTMLButtonElement;
+  connectorBtn: HTMLButtonElement;
   indentSelect: HTMLSelectElement;
+  leftTabContainer: HTMLDivElement;
+  rightTabContainer: HTMLDivElement;
+  leftTabScrollLeft: HTMLButtonElement;
+  leftTabScrollRight: HTMLButtonElement;
+  rightTabScrollLeft: HTMLButtonElement;
+  rightTabScrollRight: HTMLButtonElement;
+  leftTabAdd: HTMLButtonElement;
+  rightTabAdd: HTMLButtonElement;
+  leftSave: HTMLButtonElement;
+  leftDownload: HTMLButtonElement;
+  leftUpload: HTMLButtonElement;
+  leftClear: HTMLButtonElement;
+  leftFileInput: HTMLInputElement;
+  rightSave: HTMLButtonElement;
+  rightDownload: HTMLButtonElement;
+  rightUpload: HTMLButtonElement;
+  rightClear: HTMLButtonElement;
+  rightFileInput: HTMLInputElement;
+  leftWrapper: HTMLDivElement;
+  rightWrapper: HTMLDivElement;
 }
 
 interface State {
   isDarkMode: boolean;
   isSoftWrap: boolean;
+  showConnector: boolean;
   indentSize: number;
   diffResult: ProcessedViewModel | null;
   scrollPending: boolean;
   resizeTimeout: number | null;
+  leftTabs: TabData[];
+  rightTabs: TabData[];
+  leftActiveTabId: string;
+  rightActiveTabId: string;
 }
 
 interface ConnectorBlock {
@@ -37,10 +78,12 @@ interface ConnectorBlock {
 const LINE_HEIGHT = 20;
 const PADDING_TOP = 8;
 const SVG_WIDTH = 48;
+const STORAGE_KEY = 'diffViewerData';
+const MAX_STORAGE_SIZE = 1024 * 1024;
 
-const SAMPLE_OLD = ``;
-
-const SAMPLE_NEW = ``;
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
 
 class DiffEditor {
   private el: Elements;
@@ -50,13 +93,19 @@ class DiffEditor {
     this.state = {
       isDarkMode: localStorage.getItem('darkMode') !== 'false',
       isSoftWrap: localStorage.getItem('softWrap') === 'true',
+      showConnector: localStorage.getItem('showConnector') !== 'false',
       indentSize: parseInt(localStorage.getItem('indentSize') ?? '4', 10),
       diffResult: null,
       scrollPending: false,
       resizeTimeout: null,
+      leftTabs: [],
+      rightTabs: [],
+      leftActiveTabId: '',
+      rightActiveTabId: '',
     };
 
     this.el = this.queryElements();
+    this.loadFromStorage();
     this.setup();
   }
 
@@ -74,26 +123,120 @@ class DiffEditor {
       rightStats: document.getElementById('rightStats') as HTMLDivElement,
       connectorSvg: document.getElementById('connectorSvg') as unknown as SVGSVGElement,
       connectorContent: document.querySelector('.connector-content') as HTMLDivElement,
+      diffConnector: document.getElementById('diffConnector') as HTMLDivElement,
       wrapBtn: document.getElementById('wrapBtn') as HTMLButtonElement,
       themeBtn: document.getElementById('themeBtn') as HTMLButtonElement,
+      connectorBtn: document.getElementById('connectorBtn') as HTMLButtonElement,
       indentSelect: document.getElementById('indentSelect') as HTMLSelectElement,
+      leftTabContainer: document.getElementById('leftTabContainer') as HTMLDivElement,
+      rightTabContainer: document.getElementById('rightTabContainer') as HTMLDivElement,
+      leftTabScrollLeft: document.getElementById('leftTabScrollLeft') as HTMLButtonElement,
+      leftTabScrollRight: document.getElementById('leftTabScrollRight') as HTMLButtonElement,
+      rightTabScrollLeft: document.getElementById('rightTabScrollLeft') as HTMLButtonElement,
+      rightTabScrollRight: document.getElementById('rightTabScrollRight') as HTMLButtonElement,
+      leftTabAdd: document.getElementById('leftTabAdd') as HTMLButtonElement,
+      rightTabAdd: document.getElementById('rightTabAdd') as HTMLButtonElement,
+      leftSave: document.getElementById('leftSave') as HTMLButtonElement,
+      leftDownload: document.getElementById('leftDownload') as HTMLButtonElement,
+      leftUpload: document.getElementById('leftUpload') as HTMLButtonElement,
+      leftClear: document.getElementById('leftClear') as HTMLButtonElement,
+      leftFileInput: document.getElementById('leftFileInput') as HTMLInputElement,
+      rightSave: document.getElementById('rightSave') as HTMLButtonElement,
+      rightDownload: document.getElementById('rightDownload') as HTMLButtonElement,
+      rightUpload: document.getElementById('rightUpload') as HTMLButtonElement,
+      rightClear: document.getElementById('rightClear') as HTMLButtonElement,
+      rightFileInput: document.getElementById('rightFileInput') as HTMLInputElement,
+      leftWrapper: document.querySelector('.editor-panel:first-of-type .editor-wrapper') as HTMLDivElement,
+      rightWrapper: document.querySelector('.editor-panel:last-of-type .editor-wrapper') as HTMLDivElement,
     };
   }
 
+  private loadFromStorage(): void {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const data: StorageData = JSON.parse(stored);
+        this.state.leftTabs = data.leftTabs || [];
+        this.state.rightTabs = data.rightTabs || [];
+        this.state.leftActiveTabId = data.leftActiveTab || '';
+        this.state.rightActiveTabId = data.rightActiveTab || '';
+      }
+    } catch {
+    }
+
+    for (const tab of this.state.leftTabs) {
+      if (tab.savedContent === undefined) {
+        tab.savedContent = tab.content;
+      }
+    }
+    for (const tab of this.state.rightTabs) {
+      if (tab.savedContent === undefined) {
+        tab.savedContent = tab.content;
+      }
+    }
+
+    if (this.state.leftTabs.length === 0) {
+      const tab: TabData = { id: generateId(), name: 'Untitled', content: '', savedContent: null };
+      this.state.leftTabs.push(tab);
+      this.state.leftActiveTabId = tab.id;
+    }
+    if (this.state.rightTabs.length === 0) {
+      const tab: TabData = { id: generateId(), name: 'Untitled', content: '', savedContent: null };
+      this.state.rightTabs.push(tab);
+      this.state.rightActiveTabId = tab.id;
+    }
+
+    if (!this.state.leftTabs.find(t => t.id === this.state.leftActiveTabId)) {
+      this.state.leftActiveTabId = this.state.leftTabs[0].id;
+    }
+    if (!this.state.rightTabs.find(t => t.id === this.state.rightActiveTabId)) {
+      this.state.rightActiveTabId = this.state.rightTabs[0].id;
+    }
+  }
+
+  private saveToStorage(): void {
+    const data: StorageData = {
+      leftTabs: this.state.leftTabs,
+      rightTabs: this.state.rightTabs,
+      leftActiveTab: this.state.leftActiveTabId,
+      rightActiveTab: this.state.rightActiveTabId,
+    };
+    const json = JSON.stringify(data);
+
+    if (json.length > MAX_STORAGE_SIZE) {
+      alert(`Warning: Data size (${(json.length / 1024 / 1024).toFixed(2)} MiB) exceeds 1 MiB.`);
+    }
+
+    try {
+      localStorage.setItem(STORAGE_KEY, json);
+    } catch (e) {
+      alert('Failed to save to local storage. Data may be too large.');
+    }
+  }
+
   private setup(): void {
-    this.el.leftEditor.value = SAMPLE_OLD;
-    this.el.rightEditor.value = SAMPLE_NEW;
     this.el.indentSelect.value = String(this.state.indentSize);
 
     this.bindEvents();
     this.applyTheme();
     this.applyWrap();
+    this.applyConnectorVisibility();
+    this.loadActiveTabContent();
+    this.renderTabs('left');
+    this.renderTabs('right');
     this.updateDiff();
 
     requestAnimationFrame(() => {
       this.syncHeight(this.el.leftHighlight, this.el.leftEditor);
       this.syncHeight(this.el.rightHighlight, this.el.rightEditor);
     });
+  }
+
+  private loadActiveTabContent(): void {
+    const leftTab = this.state.leftTabs.find(t => t.id === this.state.leftActiveTabId);
+    const rightTab = this.state.rightTabs.find(t => t.id === this.state.rightActiveTabId);
+    this.el.leftEditor.value = leftTab?.content ?? '';
+    this.el.rightEditor.value = rightTab?.content ?? '';
   }
 
   private bindEvents(): void {
@@ -105,7 +248,31 @@ class DiffEditor {
     this.el.rightContent.addEventListener('scroll', () => this.handleRightScroll());
     this.el.wrapBtn.addEventListener('click', () => this.toggleWrap());
     this.el.themeBtn.addEventListener('click', () => this.toggleTheme());
+    this.el.connectorBtn.addEventListener('click', () => this.toggleConnector());
     this.el.indentSelect.addEventListener('change', () => this.handleIndentChange());
+
+    this.el.leftTabAdd.addEventListener('click', () => this.addTab('left'));
+    this.el.rightTabAdd.addEventListener('click', () => this.addTab('right'));
+    this.el.leftTabScrollLeft.addEventListener('click', () => this.scrollTabs('left', -100));
+    this.el.leftTabScrollRight.addEventListener('click', () => this.scrollTabs('left', 100));
+    this.el.rightTabScrollLeft.addEventListener('click', () => this.scrollTabs('right', -100));
+    this.el.rightTabScrollRight.addEventListener('click', () => this.scrollTabs('right', 100));
+    this.el.leftTabContainer.addEventListener('wheel', (e) => this.handleTabWheel(e, 'left'));
+    this.el.rightTabContainer.addEventListener('wheel', (e) => this.handleTabWheel(e, 'right'));
+
+    this.el.leftSave.addEventListener('click', () => this.saveCurrentTab('left'));
+    this.el.rightSave.addEventListener('click', () => this.saveCurrentTab('right'));
+    this.el.leftDownload.addEventListener('click', () => this.downloadCurrentTab('left'));
+    this.el.rightDownload.addEventListener('click', () => this.downloadCurrentTab('right'));
+    this.el.leftUpload.addEventListener('click', () => this.el.leftFileInput.click());
+    this.el.rightUpload.addEventListener('click', () => this.el.rightFileInput.click());
+    this.el.leftFileInput.addEventListener('change', (e) => this.handleFileUpload(e, 'left'));
+    this.el.rightFileInput.addEventListener('change', (e) => this.handleFileUpload(e, 'right'));
+    this.el.leftClear.addEventListener('click', () => this.clearEditor('left'));
+    this.el.rightClear.addEventListener('click', () => this.clearEditor('right'));
+
+    this.setupDragDrop(this.el.leftWrapper, 'left');
+    this.setupDragDrop(this.el.rightWrapper, 'right');
 
     window.addEventListener('resize', () => {
       if (this.state.resizeTimeout) clearTimeout(this.state.resizeTimeout);
@@ -119,11 +286,333 @@ class DiffEditor {
     });
   }
 
+  private setupDragDrop(wrapper: HTMLDivElement, side: 'left' | 'right'): void {
+    wrapper.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      wrapper.classList.add('drag-over');
+    });
+
+    wrapper.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+
+    wrapper.addEventListener('dragleave', (e) => {
+      if (!wrapper.contains(e.relatedTarget as Node)) {
+        wrapper.classList.remove('drag-over');
+      }
+    });
+
+    wrapper.addEventListener('drop', (e) => {
+      e.preventDefault();
+      wrapper.classList.remove('drag-over');
+
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        this.loadFile(files[0], side);
+      }
+    });
+  }
+
+  private loadFile(file: File, side: 'left' | 'right'): void {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const content = reader.result as string;
+      const editor = side === 'left' ? this.el.leftEditor : this.el.rightEditor;
+      editor.value = content;
+
+      const tabs = side === 'left' ? this.state.leftTabs : this.state.rightTabs;
+      const activeId = side === 'left' ? this.state.leftActiveTabId : this.state.rightActiveTabId;
+      const tab = tabs.find(t => t.id === activeId);
+      if (tab) {
+        tab.name = file.name;
+        tab.content = content;
+        this.renderTabs(side);
+      }
+
+      this.updateDiff();
+    };
+    reader.readAsText(file);
+  }
+
+  private handleFileUpload(e: Event, side: 'left' | 'right'): void {
+    const input = e.target as HTMLInputElement;
+    const files = input.files;
+    if (files && files.length > 0) {
+      this.loadFile(files[0], side);
+    }
+    input.value = '';
+  }
+
+  private saveCurrentTab(side: 'left' | 'right'): void {
+    const tabs = side === 'left' ? this.state.leftTabs : this.state.rightTabs;
+    const activeId = side === 'left' ? this.state.leftActiveTabId : this.state.rightActiveTabId;
+    const editor = side === 'left' ? this.el.leftEditor : this.el.rightEditor;
+
+    const tab = tabs.find(t => t.id === activeId);
+    if (tab) {
+      tab.content = editor.value;
+      tab.savedContent = editor.value;
+    }
+
+    this.saveToStorage();
+    this.renderTabs(side);
+  }
+
+  private downloadCurrentTab(side: 'left' | 'right'): void {
+    const tabs = side === 'left' ? this.state.leftTabs : this.state.rightTabs;
+    const activeId = side === 'left' ? this.state.leftActiveTabId : this.state.rightActiveTabId;
+    const editor = side === 'left' ? this.el.leftEditor : this.el.rightEditor;
+
+    const tab = tabs.find(t => t.id === activeId);
+    const filename = tab?.name || 'untitled.txt';
+    const content = editor.value;
+
+    const blob = new Blob([content], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.includes('.') ? filename : `${filename}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  private clearEditor(side: 'left' | 'right'): void {
+    const editor = side === 'left' ? this.el.leftEditor : this.el.rightEditor;
+    editor.value = '';
+    this.saveCurrentTabContent(side);
+    this.renderTabs(side);
+    this.updateDiff();
+  }
+
+  private renderTabs(side: 'left' | 'right'): void {
+    const container = side === 'left' ? this.el.leftTabContainer : this.el.rightTabContainer;
+    const tabs = side === 'left' ? this.state.leftTabs : this.state.rightTabs;
+    const activeId = side === 'left' ? this.state.leftActiveTabId : this.state.rightActiveTabId;
+
+    container.innerHTML = '';
+
+    for (const tab of tabs) {
+      const tabEl = document.createElement('div');
+      const isActive = tab.id === activeId;
+      tabEl.className = `tab${isActive ? ' active' : ''}`;
+      tabEl.dataset.id = tab.id;
+
+      const isUnsaved = this.isTabUnsaved(side, tab);
+
+      const nameEl = document.createElement('span');
+      nameEl.className = 'tab-name';
+      nameEl.textContent = isUnsaved ? `*${tab.name}` : tab.name;
+      tabEl.appendChild(nameEl);
+
+      const closeEl = document.createElement('span');
+      closeEl.className = 'tab-close';
+      closeEl.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+      closeEl.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.closeTab(side, tab.id);
+      });
+      tabEl.appendChild(closeEl);
+
+      let clickTimeout: number | null = null;
+      tabEl.addEventListener('click', () => {
+        if (clickTimeout) {
+          clearTimeout(clickTimeout);
+          clickTimeout = null;
+          return;
+        }
+        clickTimeout = window.setTimeout(() => {
+          clickTimeout = null;
+          if (tab.id !== activeId) {
+            this.selectTab(side, tab.id);
+          }
+        }, 200);
+      });
+
+      tabEl.addEventListener('dblclick', (e) => {
+        e.preventDefault();
+        if (clickTimeout) {
+          clearTimeout(clickTimeout);
+          clickTimeout = null;
+        }
+        this.startEditTabName(side, tab.id, nameEl);
+      });
+
+      container.appendChild(tabEl);
+    }
+
+    this.updateTabScrollButtons(side);
+  }
+
+  private addTab(side: 'left' | 'right'): void {
+    this.saveCurrentTabContent(side);
+
+    const tabs = side === 'left' ? this.state.leftTabs : this.state.rightTabs;
+    const newTab: TabData = {
+      id: generateId(),
+      name: 'Untitled',
+      content: '',
+      savedContent: null,
+    };
+    tabs.push(newTab);
+
+    if (side === 'left') {
+      this.state.leftActiveTabId = newTab.id;
+    } else {
+      this.state.rightActiveTabId = newTab.id;
+    }
+
+    this.loadActiveTabContent();
+    this.renderTabs(side);
+    this.updateDiff();
+
+    const container = side === 'left' ? this.el.leftTabContainer : this.el.rightTabContainer;
+    requestAnimationFrame(() => {
+      container.scrollLeft = container.scrollWidth;
+    });
+  }
+
+  private closeTab(side: 'left' | 'right', tabId: string): void {
+    const tabs = side === 'left' ? this.state.leftTabs : this.state.rightTabs;
+    const activeId = side === 'left' ? this.state.leftActiveTabId : this.state.rightActiveTabId;
+
+    if (tabs.length <= 1) {
+      const tab = tabs[0];
+      tab.content = '';
+      tab.savedContent = null;
+      tab.name = 'Untitled';
+      const editor = side === 'left' ? this.el.leftEditor : this.el.rightEditor;
+      editor.value = '';
+      this.renderTabs(side);
+      this.updateDiff();
+      return;
+    }
+
+    const index = tabs.findIndex(t => t.id === tabId);
+    if (index === -1) return;
+
+    tabs.splice(index, 1);
+
+    if (activeId === tabId) {
+      const newActiveIndex = Math.min(index, tabs.length - 1);
+      if (side === 'left') {
+        this.state.leftActiveTabId = tabs[newActiveIndex].id;
+      } else {
+        this.state.rightActiveTabId = tabs[newActiveIndex].id;
+      }
+      this.loadActiveTabContent();
+    }
+
+    this.renderTabs(side);
+    this.saveToStorage();
+    this.updateDiff();
+  }
+
+  private isTabUnsaved(side: 'left' | 'right', tab: TabData): boolean {
+    if (tab.savedContent === null) {
+      return true;
+    }
+    const activeId = side === 'left' ? this.state.leftActiveTabId : this.state.rightActiveTabId;
+    const editor = side === 'left' ? this.el.leftEditor : this.el.rightEditor;
+    const currentContent = tab.id === activeId ? editor.value : tab.content;
+    return currentContent !== tab.savedContent;
+  }
+
+  private selectTab(side: 'left' | 'right', tabId: string): void {
+    this.saveCurrentTabContent(side);
+
+    if (side === 'left') {
+      this.state.leftActiveTabId = tabId;
+    } else {
+      this.state.rightActiveTabId = tabId;
+    }
+
+    this.loadActiveTabContent();
+    this.renderTabs(side);
+    this.updateDiff();
+  }
+
+  private saveCurrentTabContent(side: 'left' | 'right'): void {
+    const tabs = side === 'left' ? this.state.leftTabs : this.state.rightTabs;
+    const activeId = side === 'left' ? this.state.leftActiveTabId : this.state.rightActiveTabId;
+    const editor = side === 'left' ? this.el.leftEditor : this.el.rightEditor;
+
+    const tab = tabs.find(t => t.id === activeId);
+    if (tab) {
+      tab.content = editor.value;
+    }
+  }
+
+  private startEditTabName(side: 'left' | 'right', tabId: string, nameEl: HTMLSpanElement): void {
+    const tabs = side === 'left' ? this.state.leftTabs : this.state.rightTabs;
+    const tab = tabs.find(t => t.id === tabId);
+    if (!tab) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-name-input';
+    input.value = tab.name;
+
+    let isFinishing = false;
+    const finishEdit = () => {
+      if (isFinishing) return;
+      isFinishing = true;
+
+      const newName = input.value.trim() || 'Untitled';
+      tab.name = newName;
+      this.saveToStorage();
+      this.renderTabs(side);
+    };
+
+    input.addEventListener('blur', finishEdit);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        input.blur();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        isFinishing = true;
+        this.renderTabs(side);
+      }
+    });
+
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+  }
+
+  private scrollTabs(side: 'left' | 'right', delta: number): void {
+    const container = side === 'left' ? this.el.leftTabContainer : this.el.rightTabContainer;
+    container.scrollBy({ left: delta, behavior: 'smooth' });
+    setTimeout(() => this.updateTabScrollButtons(side), 200);
+  }
+
+  private handleTabWheel(e: WheelEvent, side: 'left' | 'right'): void {
+    e.preventDefault();
+    const container = side === 'left' ? this.el.leftTabContainer : this.el.rightTabContainer;
+    container.scrollLeft += e.deltaY;
+    this.updateTabScrollButtons(side);
+  }
+
+  private updateTabScrollButtons(side: 'left' | 'right'): void {
+    const container = side === 'left' ? this.el.leftTabContainer : this.el.rightTabContainer;
+    const leftBtn = side === 'left' ? this.el.leftTabScrollLeft : this.el.rightTabScrollLeft;
+    const rightBtn = side === 'left' ? this.el.leftTabScrollRight : this.el.rightTabScrollRight;
+
+    leftBtn.disabled = container.scrollLeft <= 0;
+    rightBtn.disabled = container.scrollLeft >= container.scrollWidth - container.clientWidth;
+  }
+
   private onLeftInput(): void {
+    this.saveCurrentTabContent('left');
+    this.renderTabs('left');
     this.updateDiff();
   }
 
   private onRightInput(): void {
+    this.saveCurrentTabContent('right');
+    this.renderTabs('right');
     this.updateDiff();
   }
 
@@ -152,6 +641,23 @@ class DiffEditor {
       this.syncHeight(this.el.leftHighlight, this.el.leftEditor);
       this.syncHeight(this.el.rightHighlight, this.el.rightEditor);
     });
+  }
+
+  private toggleConnector(): void {
+    this.state.showConnector = !this.state.showConnector;
+    localStorage.setItem('showConnector', String(this.state.showConnector));
+    this.applyConnectorVisibility();
+  }
+
+  private applyConnectorVisibility(): void {
+    this.el.connectorBtn.classList.toggle('active', this.state.showConnector);
+    if (this.state.showConnector) {
+      this.drawConnectors();
+    } else {
+      while (this.el.connectorSvg.firstChild) {
+        this.el.connectorSvg.removeChild(this.el.connectorSvg.firstChild);
+      }
+    }
   }
 
   private handleIndentChange(): void {
@@ -306,7 +812,6 @@ class DiffEditor {
     highlight.classList.add('visible');
     editor.classList.add('has-highlights');
 
-    // Build a map from lineNo to line info for quick lookup
     const lineMap = new Map<number, { line: ProcessedLine; lineClass: string; highlights: InlineHighlight[] }>();
     for (const line of result.lines) {
       const leftInfo = line.left;
@@ -324,12 +829,11 @@ class DiffEditor {
       lineMap.set(info.lineNo, { line, lineClass, highlights: lineHighlights });
     }
 
-    // Render based on ACTUAL textarea content order, not diff result order
     const textareaLines = editor.value.split('\n');
     const htmlParts: string[] = [];
 
     for (let i = 0; i < textareaLines.length; i++) {
-      const lineNo = i + 1; // 1-indexed
+      const lineNo = i + 1;
       const content = textareaLines[i];
 
       if (i > 0) htmlParts.push('\n');
@@ -353,18 +857,15 @@ class DiffEditor {
   }
 
   private getLineClass(leftKind: number, rightKind: number, isLeft: boolean): string {
-    // Modified pair: both sides are non-blank and different
     if (leftKind === LineKind.Removed && rightKind === LineKind.Added) {
       return 'hl-modified';
     }
 
     if (isLeft) {
-      // Left side: only show red for pure deletions
       if (leftKind === LineKind.Removed && rightKind === LineKind.Blank) {
         return 'hl-removed';
       }
     } else {
-      // Right side: only show green for pure additions
       if (rightKind === LineKind.Added && leftKind === LineKind.Blank) {
         return 'hl-added';
       }
@@ -432,7 +933,6 @@ class DiffEditor {
     const blocks: ConnectorBlock[] = [];
     const rightUsed = new Set<number>();
 
-    // First pass: collect removed and modified blocks from left side
     let i = 0;
     while (i < lines.length) {
       const line = lines[i];
@@ -451,7 +951,6 @@ class DiffEditor {
         const startIndex = i;
         let endIndex = i;
 
-        // Collect consecutive lines of the same type
         while (endIndex + 1 < lines.length) {
           const nextLine = lines[endIndex + 1];
           const nextLeftKind = nextLine.left.kind;
@@ -467,7 +966,6 @@ class DiffEditor {
           }
         }
 
-        // Mark right side as used (except for pure added lines)
         for (let idx = startIndex; idx <= endIndex; idx++) {
           if (lines[idx].right.kind !== LineKind.Added || lines[idx].left.kind === LineKind.Removed) {
             rightUsed.add(idx);
@@ -481,7 +979,6 @@ class DiffEditor {
       }
     }
 
-    // Second pass: collect remaining added blocks from right side
     i = 0;
     while (i < lines.length) {
       const line = lines[i];
@@ -513,7 +1010,7 @@ class DiffEditor {
 
   private drawConnectors(): void {
     const result = this.state.diffResult;
-    if (!result) return;
+    if (!result || !this.state.showConnector) return;
 
     while (this.el.connectorSvg.firstChild) {
       this.el.connectorSvg.removeChild(this.el.connectorSvg.firstChild);
@@ -542,30 +1039,26 @@ class DiffEditor {
     rightScroll: number,
     viewportHeight: number
   ): void {
-    // Find display positions for left and right sides
     const leftPositions = this.getBlockDisplayPositions(lines, block, true);
     const rightPositions = this.getBlockDisplayPositions(lines, block, false);
 
     let leftStartY: number, leftEndY: number, rightStartY: number, rightEndY: number;
 
     if (block.type === 'added') {
-      // Pure addition: left side is a single insertion point
       const insertionLineNo = this.getInsertionLineNo(lines, block.startIndex, true);
-      const insertionPos = insertionLineNo - 1; // Convert to 0-indexed
+      const insertionPos = insertionLineNo - 1;
       leftStartY = PADDING_TOP + insertionPos * LINE_HEIGHT - leftScroll;
       leftEndY = leftStartY;
       rightStartY = PADDING_TOP + rightPositions.start * LINE_HEIGHT - rightScroll;
       rightEndY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
     } else if (block.type === 'removed') {
-      // Pure removal: right side is a single deletion point
       const deletionLineNo = this.getInsertionLineNo(lines, block.startIndex, false);
-      const deletionPos = deletionLineNo - 1; // Convert to 0-indexed
+      const deletionPos = deletionLineNo - 1;
       leftStartY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
       leftEndY = PADDING_TOP + (leftPositions.end + 1) * LINE_HEIGHT - leftScroll;
       rightStartY = PADDING_TOP + deletionPos * LINE_HEIGHT - rightScroll;
       rightEndY = rightStartY;
     } else {
-      // Modified: both sides have content
       leftStartY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
       leftEndY = PADDING_TOP + (leftPositions.end + 1) * LINE_HEIGHT - leftScroll;
       rightStartY = PADDING_TOP + rightPositions.start * LINE_HEIGHT - rightScroll;
