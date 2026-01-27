@@ -50,15 +50,15 @@ TEST(ViewModel, SingleDelete) {
 }
 
 TEST(ViewModel, Modification) {
-    const auto vm = create_view_model("a\nold\nc", "a\nnew\nc");
+    const auto vm = create_view_model("a\n=====old=====\nc", "a\n=====new=====\nc");
     ASSERT_EQ(vm.connectors.size(), 1);
 
     bool found_pair = false;
     for (const auto&[left, right] : vm.lines) {
         if (left.kind == LineKind::Removed && right.kind == LineKind::Added) {
             found_pair = true;
-            EXPECT_EQ(vm.old_lines[left.line_no - 1], "old");
-            EXPECT_EQ(vm.new_lines[right.line_no - 1], "new");
+            EXPECT_EQ(vm.old_lines[left.line_no - 1], "=====old=====");
+            EXPECT_EQ(vm.new_lines[right.line_no - 1], "=====new=====");
         }
     }
     EXPECT_TRUE(found_pair);

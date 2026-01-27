@@ -1,5 +1,5 @@
 // @ts-ignore
-import { init, createViewModel, processViewModel, LineKind, type ProcessedViewModel, type ProcessedLine, type InlineHighlight } from '../wasm/index.js';
+import { init, createViewModel, processViewModel, LineKind, type ProcessedViewModel, type ProcessedLine, type InlineHighlight } from '../../wasm/index.js';
 
 interface Elements {
   leftEditor: HTMLTextAreaElement;
@@ -277,16 +277,9 @@ class DiffEditor {
     const editor = isLeft ? this.el.leftEditor : this.el.rightEditor;
     const lineNumbers = isLeft ? this.el.leftLineNumbers : this.el.rightLineNumbers;
 
-    const relevantLines = result.lines.filter(line => {
-      const info = isLeft ? line.left : line.right;
-      return info.kind !== LineKind.Blank;
-    });
-
-    lineNumbers.innerHTML = relevantLines
-      .map(line => {
-        const info = isLeft ? line.left : line.right;
-        return `<div class="line-number">${info.lineNo || ''}</div>`;
-      })
+    const textareaLines = editor.value.split('\n');
+    lineNumbers.innerHTML = textareaLines
+      .map((_, i) => `<div class="line-number">${i + 1}</div>`)
       .join('');
 
     this.renderHighlights(highlight, editor, result, isLeft);
@@ -557,14 +550,16 @@ class DiffEditor {
 
     if (block.type === 'added') {
       // Pure addition: left side is a single insertion point
-      const insertionPos = this.getDisplayPosition(lines, block.startIndex, true);
+      const insertionLineNo = this.getInsertionLineNo(lines, block.startIndex, true);
+      const insertionPos = insertionLineNo - 1; // Convert to 0-indexed
       leftStartY = PADDING_TOP + insertionPos * LINE_HEIGHT - leftScroll;
       leftEndY = leftStartY;
       rightStartY = PADDING_TOP + rightPositions.start * LINE_HEIGHT - rightScroll;
       rightEndY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
     } else if (block.type === 'removed') {
       // Pure removal: right side is a single deletion point
-      const deletionPos = this.getDisplayPosition(lines, block.startIndex, false);
+      const deletionLineNo = this.getInsertionLineNo(lines, block.startIndex, false);
+      const deletionPos = deletionLineNo - 1; // Convert to 0-indexed
       leftStartY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
       leftEndY = PADDING_TOP + (leftPositions.end + 1) * LINE_HEIGHT - leftScroll;
       rightStartY = PADDING_TOP + deletionPos * LINE_HEIGHT - rightScroll;
@@ -577,7 +572,6 @@ class DiffEditor {
       rightEndY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
     }
 
-    // Check if visible
     const minY = Math.min(leftStartY, rightStartY);
     const maxY = Math.max(leftEndY, rightEndY);
     if (maxY < 0 || minY > viewportHeight) return;
@@ -590,33 +584,37 @@ class DiffEditor {
     block: ConnectorBlock,
     isLeft: boolean
   ): { start: number; end: number } {
-    let start = -1;
-    let end = -1;
+    let startLineNo = -1;
+    let endLineNo = -1;
 
     for (let i = block.startIndex; i <= block.endIndex; i++) {
       const info = isLeft ? lines[i].left : lines[i].right;
-      if (info.kind !== LineKind.Blank) {
-        const displayPos = this.getDisplayPosition(lines, i, isLeft);
-        if (start === -1) start = displayPos;
-        end = displayPos;
+      if (info.kind !== LineKind.Blank && info.lineNo > 0) {
+        if (startLineNo === -1 || info.lineNo < startLineNo) {
+          startLineNo = info.lineNo;
+        }
+        if (endLineNo === -1 || info.lineNo > endLineNo) {
+          endLineNo = info.lineNo;
+        }
       }
     }
 
-    // If no content on this side, use the insertion point
-    if (start === -1) {
-      start = end = this.getDisplayPosition(lines, block.startIndex, isLeft);
+    if (startLineNo === -1) {
+      const insertionLineNo = this.getInsertionLineNo(lines, block.startIndex, isLeft);
+      return { start: insertionLineNo - 1, end: insertionLineNo - 1 };
     }
 
-    return { start, end };
+    return { start: startLineNo - 1, end: endLineNo - 1 };
   }
 
-  private getDisplayPosition(lines: ProcessedLine[], index: number, isLeft: boolean): number {
-    let pos = 0;
-    for (let i = 0; i < index && i < lines.length; i++) {
+  private getInsertionLineNo(lines: ProcessedLine[], index: number, isLeft: boolean): number {
+    for (let i = index - 1; i >= 0; i--) {
       const info = isLeft ? lines[i].left : lines[i].right;
-      if (info.kind !== LineKind.Blank) pos++;
+      if (info.kind !== LineKind.Blank && info.lineNo > 0) {
+        return info.lineNo + 1;
+      }
     }
-    return pos;
+    return 1;
   }
 
   private drawConnectorShape(

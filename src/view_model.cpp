@@ -2,7 +2,9 @@
 #include "diff.h"
 #include "string_utils.h"
 
+#include <map>
 #include <set>
+#include <algorithm>
 #include <grapheme_break.h>
 
 namespace diff_view {
@@ -90,12 +92,27 @@ ViewModel create_view_model(const std::string& old_text, const std::string& new_
                 insert_indices.push_back(new_index);
             }
         }
-        size_t pair_count = std::min(delete_indices.size(), insert_indices.size());
-        std::set<size_t> paired_inserts;
-        for (size_t i = 0; i < pair_count; ++i) {
-            paired_inserts.insert(insert_indices[i]);
+        size_t potential_pair_count = std::min(delete_indices.size(), insert_indices.size());
+        std::set<size_t> valid_pair_del_indices;
+        std::set<size_t> valid_pair_ins_indices;
+        for (size_t i = 0; i < potential_pair_count; ++i) {
+            size_t del_idx = delete_indices[i];
+            size_t ins_idx = insert_indices[i];
+            auto char_diff = diff_chars(vm.old_lines[del_idx], vm.new_lines[ins_idx]);
+            const double similarity = calculate_similarity(char_diff);
+            if (similarity >= SIMILARITY_THRESHOLD) {
+                valid_pair_del_indices.insert(del_idx);
+                valid_pair_ins_indices.insert(ins_idx);
+            }
         }
-        size_t del_i = 0;
+        std::map<size_t, size_t> del_to_ins_map;
+        for (size_t i = 0; i < potential_pair_count; ++i) {
+            size_t del_idx = delete_indices[i];
+            size_t ins_idx = insert_indices[i];
+            if (valid_pair_del_indices.contains(del_idx)) {
+                del_to_ins_map[del_idx] = ins_idx;
+            }
+        }
         for (const auto& [op, old_index, new_index] : hunk.lines) {
             if (op == DiffOp::Equal) {
                 vm.lines.push_back({
@@ -110,8 +127,8 @@ ViewModel create_view_model(const std::string& old_text, const std::string& new_
                     left_start = line_no;
                 }
                 left_end = line_no;
-                if (del_i < insert_indices.size()) {
-                    size_t ins_idx = insert_indices[del_i];
+                if (valid_pair_del_indices.contains(old_index)) {
+                    size_t ins_idx = del_to_ins_map[old_index];
                     vm.lines.push_back({
                         {LineKind::Removed, line_no},
                         {LineKind::Added, static_cast<uint32_t>(ins_idx + 1)}
@@ -120,7 +137,6 @@ ViewModel create_view_model(const std::string& old_text, const std::string& new_
                         right_start = static_cast<uint32_t>(ins_idx + 1);
                     }
                     right_end = static_cast<uint32_t>(ins_idx + 1);
-                    ++del_i;
                 } else {
                     vm.lines.push_back({
                         {LineKind::Removed, line_no},
@@ -129,7 +145,7 @@ ViewModel create_view_model(const std::string& old_text, const std::string& new_
                 }
                 old_pos = old_index + 1;
             } else if (op == DiffOp::Insert) {
-                if (paired_inserts.contains(new_index)) {
+                if (valid_pair_ins_indices.contains(new_index)) {
                     continue;
                 }
                 auto line_no = static_cast<uint32_t>(new_index + 1);
@@ -145,21 +161,34 @@ ViewModel create_view_model(const std::string& old_text, const std::string& new_
             }
         }
         if (vm.lines.size() > connector_top) {
+            auto get_type_order = [](const ViewLine& v) -> int {
+                if (v.left.kind != LineKind::Blank && v.right.kind == LineKind::Blank) {
+                    return 0;
+                }
+                if (v.left.kind != LineKind::Blank && v.right.kind != LineKind::Blank) {
+                    return 1;
+                }
+                return 2;
+            };
             std::sort(vm.lines.begin() + connector_top, vm.lines.end(),
-                [](const ViewLine& a, const ViewLine& b) {
+                [&get_type_order](const ViewLine& a, const ViewLine& b) {
+                    const int a_type = get_type_order(a);
+                    const int b_type = get_type_order(b);
+                    if (a_type != b_type) {
+                        return a_type < b_type;
+                    }
                     const uint32_t a_key = (a.right.kind != LineKind::Blank) ? a.right.line_no : a.left.line_no;
                     const uint32_t b_key = (b.right.kind != LineKind::Blank) ? b.right.line_no : b.left.line_no;
                     return a_key < b_key;
                 });
         }
         for (size_t row_idx = connector_top; row_idx < vm.lines.size(); ++row_idx) {
-            const auto&[left, right] = vm.lines[row_idx];
+            const auto& [left, right] = vm.lines[row_idx];
             if (left.kind == LineKind::Removed && right.kind == LineKind::Added) {
                 size_t old_idx = left.line_no - 1;
                 size_t new_idx = right.line_no - 1;
                 auto [old_segments, new_segments] = diff_chars(vm.old_lines[old_idx], vm.new_lines[new_idx]);
-                double similarity = calculate_similarity({old_segments, new_segments});
-
+                const double similarity = calculate_similarity({old_segments, new_segments});
                 if (similarity >= SIMILARITY_THRESHOLD) {
                     auto old_graphemes = grapheme_break::segmentGraphemeClusters(vm.old_lines[old_idx]);
                     auto new_graphemes = grapheme_break::segmentGraphemeClusters(vm.new_lines[new_idx]);
