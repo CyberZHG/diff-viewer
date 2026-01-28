@@ -113,32 +113,33 @@
       ]
     }
   </script>
-  <script type="module" crossorigin src="/diff-viewer/assets/index-BNU2bVnw.js"></script>
-  <link rel="stylesheet" crossorigin href="/diff-viewer/assets/index-CHSLseye.css">
+  <script type="module" crossorigin src="/diff-viewer/assets/index-COApzgm6.js"></script>
+  <link rel="stylesheet" crossorigin href="/diff-viewer/assets/index-CbAVUnVv.css">
 </head>
 <body>
-  <div id="app">
-    <header class="top-banner">
+  <div id="app" role="application" aria-label="Diff Viewer Application">
+    <header class="top-banner" role="banner">
       <div class="banner-title">
-        <a href="https://github.com/CyberZHG/diff-viewer">Diff Viewer</a>
+        <a href="https://github.com/CyberZHG/diff-viewer" aria-label="View source on GitHub">Diff Viewer</a>
         <img src="https://visitor-badge.laobi.icu/badge?page_id=cyberzhg.diff-viewer" style="display: none" alt="visitors"/>
       </div>
-      <div class="banner-controls">
+      <nav class="banner-controls" role="toolbar" aria-label="Editor controls">
         <label class="control-label">
-          Indent:
-          <select class="control-select" id="indentSelect">
+          <span id="indentLabel">Indent:</span>
+          <select class="control-select" id="indentSelect" aria-labelledby="indentLabel">
             <option value="2">2</option>
             <option value="4" selected>4</option>
             <option value="8">8</option>
           </select>
         </label>
-        <button class="control-btn active" id="connectorBtn" title="Toggle connector lines">Connector</button>
-        <button class="control-btn" id="wrapBtn" title="Toggle soft wrap">Wrap</button>
-        <button class="control-btn icon-btn" id="themeBtn" title="Toggle dark/light mode">
-          <svg class="icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="control-btn active" id="connectorBtn" title="Toggle connector lines (shows visual links between changes)" aria-pressed="true">Connector</button>
+        <button class="control-btn" id="syncScrollBtn" title="Toggle synchronized scrolling between editors" aria-pressed="false">Sync</button>
+        <button class="control-btn" id="wrapBtn" title="Toggle soft wrap" aria-pressed="false">Wrap</button>
+        <button class="control-btn icon-btn" id="themeBtn" title="Toggle dark/light mode" aria-label="Toggle dark/light mode">
+          <svg class="icon icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
           </svg>
-          <svg class="icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <svg class="icon icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <circle cx="12" cy="12" r="5"/>
             <line x1="12" y1="1" x2="12" y2="3"/>
             <line x1="12" y1="21" x2="12" y2="23"/>
@@ -150,51 +151,53 @@
             <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
           </svg>
         </button>
-      </div>
+      </nav>
     </header>
 
-    <main class="editors-container">
-      <section class="editor-panel">
-        <div class="tab-bar" id="leftTabBar">
-          <button class="tab-scroll-btn tab-scroll-left" id="leftTabScrollLeft" title="Scroll left">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <main class="editors-container" role="main">
+      <section class="editor-panel" aria-label="Original text editor">
+        <div class="tab-bar" id="leftTabBar" role="tablist" aria-label="Original text tabs">
+          <button class="tab-scroll-btn tab-scroll-left" id="leftTabScrollLeft" title="Scroll tabs left" aria-label="Scroll tabs left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
           <div class="tab-container" id="leftTabContainer"></div>
-          <button class="tab-scroll-btn tab-scroll-right" id="leftTabScrollRight" title="Scroll right">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button class="tab-scroll-btn tab-scroll-right" id="leftTabScrollRight" title="Scroll tabs right" aria-label="Scroll tabs right">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </button>
-          <button class="tab-add-btn" id="leftTabAdd" title="Add new tab">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button class="tab-add-btn" id="leftTabAdd" title="Add new tab (Ctrl+T)" aria-label="Add new tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
           </button>
         </div>
         <div class="editor-header">
-          <span>Original</span>
-          <div class="stats" id="leftStats"></div>
+          <span id="leftEditorLabel">Original</span>
+          <div class="stats" id="leftStats" aria-live="polite"></div>
         </div>
         <div class="editor-wrapper">
-          <div class="line-numbers" id="leftLineNumbers"></div>
+          <div class="line-numbers" id="leftLineNumbers" aria-hidden="true"></div>
           <div class="editor-content" id="leftContent">
             <div class="editor-content-inner">
-              <div class="editor-highlight" id="leftHighlight"></div>
+              <div class="editor-highlight" id="leftHighlight" aria-hidden="true"></div>
               <textarea
                 id="leftEditor"
                 class="editor-textarea"
                 placeholder="Enter original text..."
                 spellcheck="false"
+                aria-labelledby="leftEditorLabel"
+                aria-describedby="leftStats"
               ></textarea>
             </div>
           </div>
         </div>
-        <div class="editor-actions">
-          <button class="action-btn" id="leftSave" title="Save to browser storage">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="editor-actions" role="toolbar" aria-label="Original text actions">
+          <button class="action-btn" id="leftSave" title="Save to browser storage (Ctrl+S)" aria-keyshortcuts="Control+S">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
               <polyline points="17 21 17 13 7 13 7 21"/>
               <polyline points="7 3 7 8 15 8"/>
@@ -202,7 +205,7 @@
             Save
           </button>
           <button class="action-btn" id="leftDownload" title="Download as file">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
               <line x1="12" y1="15" x2="12" y2="3"/>
@@ -210,7 +213,7 @@
             Download
           </button>
           <button class="action-btn" id="leftUpload" title="Upload from file">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
@@ -218,66 +221,68 @@
             Upload
           </button>
           <button class="action-btn" id="leftClear" title="Clear content">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
             Clear
           </button>
-          <input type="file" id="leftFileInput" class="hidden-file-input" accept="*/*">
+          <input type="file" id="leftFileInput" class="hidden-file-input" accept="*/*" aria-hidden="true">
         </div>
       </section>
 
-      <div class="diff-connector" id="diffConnector">
-        <div class="tab-bar connector-tab-spacer"></div>
-        <div class="editor-header connector-header">&nbsp;</div>
+      <div class="diff-connector" id="diffConnector" role="img" aria-label="Visual connector showing differences between editors">
+        <div class="tab-bar connector-tab-spacer" aria-hidden="true"></div>
+        <div class="editor-header connector-header" aria-hidden="true">&nbsp;</div>
         <div class="connector-content">
-          <svg id="connectorSvg" class="connector-svg"></svg>
+          <svg id="connectorSvg" class="connector-svg" aria-hidden="true"></svg>
         </div>
-        <div class="editor-actions connector-actions-spacer"></div>
+        <div class="editor-actions connector-actions-spacer" aria-hidden="true"></div>
       </div>
 
-      <section class="editor-panel">
-        <div class="tab-bar" id="rightTabBar">
-          <button class="tab-scroll-btn tab-scroll-left" id="rightTabScrollLeft" title="Scroll left">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <section class="editor-panel" aria-label="Modified text editor">
+        <div class="tab-bar" id="rightTabBar" role="tablist" aria-label="Modified text tabs">
+          <button class="tab-scroll-btn tab-scroll-left" id="rightTabScrollLeft" title="Scroll tabs left" aria-label="Scroll tabs left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="15 18 9 12 15 6"/>
             </svg>
           </button>
           <div class="tab-container" id="rightTabContainer"></div>
-          <button class="tab-scroll-btn tab-scroll-right" id="rightTabScrollRight" title="Scroll right">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button class="tab-scroll-btn tab-scroll-right" id="rightTabScrollRight" title="Scroll tabs right" aria-label="Scroll tabs right">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </button>
-          <button class="tab-add-btn" id="rightTabAdd" title="Add new tab">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <button class="tab-add-btn" id="rightTabAdd" title="Add new tab (Ctrl+T)" aria-label="Add new tab">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <line x1="12" y1="5" x2="12" y2="19"/>
               <line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
           </button>
         </div>
         <div class="editor-header">
-          <span>Modified</span>
-          <div class="stats" id="rightStats"></div>
+          <span id="rightEditorLabel">Modified</span>
+          <div class="stats" id="rightStats" aria-live="polite"></div>
         </div>
         <div class="editor-wrapper">
-          <div class="line-numbers" id="rightLineNumbers"></div>
+          <div class="line-numbers" id="rightLineNumbers" aria-hidden="true"></div>
           <div class="editor-content" id="rightContent">
             <div class="editor-content-inner">
-              <div class="editor-highlight" id="rightHighlight"></div>
+              <div class="editor-highlight" id="rightHighlight" aria-hidden="true"></div>
               <textarea
                 id="rightEditor"
                 class="editor-textarea"
                 placeholder="Enter modified text..."
                 spellcheck="false"
+                aria-labelledby="rightEditorLabel"
+                aria-describedby="rightStats"
               ></textarea>
             </div>
           </div>
         </div>
-        <div class="editor-actions">
-          <button class="action-btn" id="rightSave" title="Save to browser storage">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <div class="editor-actions" role="toolbar" aria-label="Modified text actions">
+          <button class="action-btn" id="rightSave" title="Save to browser storage (Ctrl+S)" aria-keyshortcuts="Control+S">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
               <polyline points="17 21 17 13 7 13 7 21"/>
               <polyline points="7 3 7 8 15 8"/>
@@ -285,7 +290,7 @@
             Save
           </button>
           <button class="action-btn" id="rightDownload" title="Download as file">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
               <line x1="12" y1="15" x2="12" y2="3"/>
@@ -293,7 +298,7 @@
             Download
           </button>
           <button class="action-btn" id="rightUpload" title="Upload from file">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="17 8 12 3 7 8"/>
               <line x1="12" y1="3" x2="12" y2="15"/>
@@ -301,13 +306,13 @@
             Upload
           </button>
           <button class="action-btn" id="rightClear" title="Clear content">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <polyline points="3 6 5 6 21 6"/>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
             </svg>
             Clear
           </button>
-          <input type="file" id="rightFileInput" class="hidden-file-input" accept="*/*">
+          <input type="file" id="rightFileInput" class="hidden-file-input" accept="*/*" aria-hidden="true">
         </div>
       </section>
     </main>
