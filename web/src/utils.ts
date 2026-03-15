@@ -30,6 +30,7 @@ export function queryElements() {
     themeBtn: document.getElementById('themeBtn') as HTMLButtonElement,
     connectorBtn: document.getElementById('connectorBtn') as HTMLButtonElement,
     syncScrollBtn: document.getElementById('syncScrollBtn') as HTMLButtonElement,
+    clearStorageBtn: document.getElementById('clearStorageBtn') as HTMLButtonElement,
     indentSelect: document.getElementById('indentSelect') as HTMLSelectElement,
     leftTabContainer: document.getElementById('leftTabContainer') as HTMLDivElement,
     rightTabContainer: document.getElementById('rightTabContainer') as HTMLDivElement,

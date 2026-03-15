@@ -96,6 +96,7 @@ export class DiffEditor {
     this.el.connectorBtn.addEventListener('click', () => this.toggleConnector());
     this.el.syncScrollBtn.addEventListener('click', () => this.toggleSyncScroll());
     this.el.indentSelect.addEventListener('change', () => this.handleIndentChange());
+    this.el.clearStorageBtn.addEventListener('click', () => this.clearStorage());
 
     this.el.leftTabAdd.addEventListener('click', () => this.handleTabAdd('left'));
     this.el.rightTabAdd.addEventListener('click', () => this.handleTabAdd('right'));
@@ -234,6 +235,12 @@ export class DiffEditor {
   private applySyncScroll(): void {
     this.el.syncScrollBtn.classList.toggle('active', this.state.syncScroll);
     this.el.syncScrollBtn.setAttribute('aria-pressed', String(this.state.syncScroll));
+  }
+
+  private clearStorage(): void {
+    if (!confirm('Clear all local storage data? This will reset all tabs and settings.')) return;
+    localStorage.clear();
+    location.reload();
   }
 
   private handleIndentChange(): void {

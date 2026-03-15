@@ -33,6 +33,7 @@ export interface Elements {
   themeBtn: HTMLButtonElement;
   connectorBtn: HTMLButtonElement;
   syncScrollBtn: HTMLButtonElement;
+  clearStorageBtn: HTMLButtonElement;
   indentSelect: HTMLSelectElement;
   leftTabContainer: HTMLDivElement;
   rightTabContainer: HTMLDivElement;
