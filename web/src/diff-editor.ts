@@ -175,13 +175,21 @@ export class DiffEditor {
   private onLeftInput(): void {
     saveCurrentTabContent(this.state, this.el, 'left');
     updateTabUnsavedState(this.state, this.el, 'left');
+    this.showEditorTextImmediately(this.el.leftEditor, this.el.leftHighlight);
     this.updateDiffDebounced();
   }
 
   private onRightInput(): void {
     saveCurrentTabContent(this.state, this.el, 'right');
     updateTabUnsavedState(this.state, this.el, 'right');
+    this.showEditorTextImmediately(this.el.rightEditor, this.el.rightHighlight);
     this.updateDiffDebounced();
+  }
+
+  private showEditorTextImmediately(editor: HTMLTextAreaElement, highlight: HTMLDivElement): void {
+    editor.classList.remove('has-highlights');
+    highlight.classList.remove('visible');
+    syncHeight(highlight, editor);
   }
 
   private toggleTheme(): void {
