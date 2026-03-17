@@ -17,7 +17,7 @@ import {
   type TabCallbacks,
 } from './tabs';
 import { drawConnectors, handleConnectorClick } from './connector';
-import { updateEditor, syncHeight, updateStats, indent, unindent } from './editor';
+import { updateEditor, syncHeight, updateStats, indent, unindent, computeLineTopOffsets } from './editor';
 import {
   setupDragDrop,
   handleFileUpload,
@@ -48,6 +48,8 @@ export class DiffEditor {
       rightActiveTabId: '',
       isScrolling: false,
       lastFocusedSide: 'left',
+      leftLineOffsets: null,
+      rightLineOffsets: null,
     };
 
     this.el = queryElements();
@@ -79,6 +81,7 @@ export class DiffEditor {
     requestAnimationFrame(() => {
       syncHeight(this.el.leftHighlight, this.el.leftEditor);
       syncHeight(this.el.rightHighlight, this.el.rightEditor);
+      this.recomputeLineOffsets();
     });
   }
 
@@ -132,6 +135,7 @@ export class DiffEditor {
           syncHeight(this.el.leftHighlight, this.el.leftEditor);
           syncHeight(this.el.rightHighlight, this.el.rightEditor);
         }
+        this.recomputeLineOffsets();
         drawConnectors(this.state, this.el);
       }, 100);
     });
@@ -205,6 +209,8 @@ export class DiffEditor {
     requestAnimationFrame(() => {
       syncHeight(this.el.leftHighlight, this.el.leftEditor);
       syncHeight(this.el.rightHighlight, this.el.rightEditor);
+      this.recomputeLineOffsets();
+      drawConnectors(this.state, this.el);
     });
   }
 
@@ -235,6 +241,11 @@ export class DiffEditor {
   private applySyncScroll(): void {
     this.el.syncScrollBtn.classList.toggle('active', this.state.syncScroll);
     this.el.syncScrollBtn.setAttribute('aria-pressed', String(this.state.syncScroll));
+  }
+
+  private recomputeLineOffsets(): void {
+    this.state.leftLineOffsets = computeLineTopOffsets(this.el.leftEditor, this.state.isSoftWrap);
+    this.state.rightLineOffsets = computeLineTopOffsets(this.el.rightEditor, this.state.isSoftWrap);
   }
 
   private clearStorage(): void {
@@ -312,6 +323,7 @@ export class DiffEditor {
     updateEditor(this.state, this.el, 'left');
     updateEditor(this.state, this.el, 'right');
     updateStats(this.state, this.el);
+    this.recomputeLineOffsets();
 
     requestAnimationFrame(() => drawConnectors(this.state, this.el));
   }

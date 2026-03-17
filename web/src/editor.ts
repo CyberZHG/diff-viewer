@@ -1,6 +1,7 @@
 // @ts-ignore
 import { LineKind, type ProcessedViewModel, type InlineHighlight } from '../../wasm/index.js';
 import type { Elements, State } from './types';
+import { LINE_HEIGHT, PADDING_TOP } from './constants';
 import { escapeHtml } from './utils';
 
 export function updateEditor(
@@ -179,6 +180,62 @@ export function indent(textarea: HTMLTextAreaElement, indentSize: number): void 
     textarea.selectionEnd = newEnd;
   }
   textarea.dispatchEvent(new Event('input'));
+}
+
+export function computeLineTopOffsets(
+  textarea: HTMLTextAreaElement,
+  isSoftWrap: boolean
+): number[] {
+  const lines = textarea.value.split('\n');
+  const count = lines.length;
+
+  if (!isSoftWrap || textarea.clientWidth === 0) {
+    return Array.from({ length: count + 1 }, (_, i) => PADDING_TOP + i * LINE_HEIGHT);
+  }
+
+  const cs = window.getComputedStyle(textarea);
+  const mirror = document.createElement('div');
+  Object.assign(mirror.style, {
+    position: 'fixed',
+    visibility: 'hidden',
+    top: '0',
+    left: '0',
+    width: `${textarea.clientWidth}px`,
+    fontFamily: cs.fontFamily,
+    fontSize: cs.fontSize,
+    lineHeight: cs.lineHeight,
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'break-word',
+    paddingTop: cs.paddingTop,
+    paddingBottom: cs.paddingBottom,
+    paddingLeft: cs.paddingLeft,
+    paddingRight: cs.paddingRight,
+    tabSize: cs.tabSize,
+    wordSpacing: cs.wordSpacing,
+    letterSpacing: cs.letterSpacing,
+    boxSizing: 'border-box',
+  });
+
+  document.body.appendChild(mirror);
+
+  const spans: HTMLSpanElement[] = [];
+  for (let i = 0; i < count; i++) {
+    const span = document.createElement('span');
+    span.textContent = lines[i] || '\u200B';
+    mirror.appendChild(span);
+    if (i < count - 1) mirror.appendChild(document.createTextNode('\n'));
+    spans.push(span);
+  }
+
+  const offsets = new Array<number>(count + 1);
+  for (let i = 0; i < count; i++) {
+    offsets[i] = spans[i].offsetTop;
+  }
+  const last = spans[count - 1];
+  offsets[count] = last.offsetTop + last.offsetHeight;
+
+  document.body.removeChild(mirror);
+  return offsets;
 }
 
 export function unindent(textarea: HTMLTextAreaElement, indentSize: number): void {

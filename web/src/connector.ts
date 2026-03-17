@@ -3,6 +3,11 @@ import { LineKind, type ProcessedLine, type ProcessedViewModel } from '../../was
 import type { ConnectorBlock, Elements, State } from './types';
 import { LINE_HEIGHT, PADDING_TOP, SVG_WIDTH } from './constants';
 
+function getOffset(offsets: number[] | null, lineIndex: number): number {
+  if (offsets !== null && lineIndex < offsets.length) return offsets[lineIndex];
+  return PADDING_TOP + lineIndex * LINE_HEIGHT;
+}
+
 export function buildConnectorBlocks(lines: ProcessedLine[]): ConnectorBlock[] {
   const blocks: ConnectorBlock[] = [];
   const rightUsed = new Set<number>();
@@ -97,6 +102,9 @@ export function handleConnectorClick(
   const leftScroll = el.leftContent.scrollTop;
   const rightScroll = el.rightContent.scrollTop;
 
+  const leftOffsets = state.leftLineOffsets;
+  const rightOffsets = state.rightLineOffsets;
+
   for (const block of blocks) {
     const leftPositions = getBlockDisplayPositions(result.lines, block, true);
     const rightPositions = getBlockDisplayPositions(result.lines, block, false);
@@ -105,19 +113,19 @@ export function handleConnectorClick(
 
     if (block.type === 'added') {
       const insertionLineNo = getInsertionLineNo(result.lines, block.startIndex, true);
-      topY = PADDING_TOP + (insertionLineNo - 1) * LINE_HEIGHT - leftScroll;
-      bottomY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
+      topY = getOffset(leftOffsets, insertionLineNo - 1) - leftScroll;
+      bottomY = getOffset(rightOffsets, rightPositions.end + 1) - rightScroll;
     } else if (block.type === 'removed') {
-      topY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
+      topY = getOffset(leftOffsets, leftPositions.start) - leftScroll;
       const deletionLineNo = getInsertionLineNo(result.lines, block.startIndex, false);
-      bottomY = PADDING_TOP + (deletionLineNo - 1) * LINE_HEIGHT - rightScroll;
+      bottomY = getOffset(rightOffsets, deletionLineNo - 1) - rightScroll;
     } else {
-      topY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
-      bottomY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
+      topY = getOffset(leftOffsets, leftPositions.start) - leftScroll;
+      bottomY = getOffset(rightOffsets, rightPositions.end + 1) - rightScroll;
     }
 
-    const minY = Math.min(topY, PADDING_TOP + rightPositions.start * LINE_HEIGHT - rightScroll);
-    const maxY = Math.max(bottomY, PADDING_TOP + (leftPositions.end + 1) * LINE_HEIGHT - leftScroll);
+    const minY = Math.min(topY, getOffset(rightOffsets, rightPositions.start) - rightScroll);
+    const maxY = Math.max(bottomY, getOffset(leftOffsets, leftPositions.end + 1) - leftScroll);
 
     if (clickY >= minY && clickY <= maxY) {
       const leftLineNo = block.type === 'added'
@@ -127,8 +135,8 @@ export function handleConnectorClick(
         ? getInsertionLineNo(result.lines, block.startIndex, false)
         : rightPositions.start + 1;
 
-      const leftScrollTarget = (leftLineNo - 1) * LINE_HEIGHT;
-      const rightScrollTarget = (rightLineNo - 1) * LINE_HEIGHT;
+      const leftScrollTarget = getOffset(leftOffsets, leftLineNo - 1) - PADDING_TOP;
+      const rightScrollTarget = getOffset(rightOffsets, rightLineNo - 1) - PADDING_TOP;
 
       state.isScrolling = true;
       el.leftContent.scrollTo({ top: leftScrollTarget, behavior: 'smooth' });
@@ -162,7 +170,7 @@ export function drawConnectors(state: State, el: Elements): void {
   const blocks = buildConnectorBlocks(result.lines);
 
   for (const block of blocks) {
-    drawConnectorBlock(el, block, result.lines, leftScroll, rightScroll, viewportHeight);
+    drawConnectorBlock(el, block, result.lines, leftScroll, rightScroll, viewportHeight, state.leftLineOffsets, state.rightLineOffsets);
   }
 }
 
@@ -172,7 +180,9 @@ function drawConnectorBlock(
   lines: ProcessedLine[],
   leftScroll: number,
   rightScroll: number,
-  viewportHeight: number
+  viewportHeight: number,
+  leftOffsets: number[] | null,
+  rightOffsets: number[] | null
 ): void {
   const leftPositions = getBlockDisplayPositions(lines, block, true);
   const rightPositions = getBlockDisplayPositions(lines, block, false);
@@ -180,24 +190,22 @@ function drawConnectorBlock(
   let leftStartY: number, leftEndY: number, rightStartY: number, rightEndY: number;
 
   if (block.type === 'added') {
-    const insertionLineNo = getInsertionLineNo(lines, block.startIndex, true);
-    const insertionPos = insertionLineNo - 1;
-    leftStartY = PADDING_TOP + insertionPos * LINE_HEIGHT - leftScroll;
+    const insertionPos = getInsertionLineNo(lines, block.startIndex, true) - 1;
+    leftStartY = getOffset(leftOffsets, insertionPos) - leftScroll;
     leftEndY = leftStartY;
-    rightStartY = PADDING_TOP + rightPositions.start * LINE_HEIGHT - rightScroll;
-    rightEndY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
+    rightStartY = getOffset(rightOffsets, rightPositions.start) - rightScroll;
+    rightEndY = getOffset(rightOffsets, rightPositions.end + 1) - rightScroll;
   } else if (block.type === 'removed') {
-    const deletionLineNo = getInsertionLineNo(lines, block.startIndex, false);
-    const deletionPos = deletionLineNo - 1;
-    leftStartY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
-    leftEndY = PADDING_TOP + (leftPositions.end + 1) * LINE_HEIGHT - leftScroll;
-    rightStartY = PADDING_TOP + deletionPos * LINE_HEIGHT - rightScroll;
+    const deletionPos = getInsertionLineNo(lines, block.startIndex, false) - 1;
+    leftStartY = getOffset(leftOffsets, leftPositions.start) - leftScroll;
+    leftEndY = getOffset(leftOffsets, leftPositions.end + 1) - leftScroll;
+    rightStartY = getOffset(rightOffsets, deletionPos) - rightScroll;
     rightEndY = rightStartY;
   } else {
-    leftStartY = PADDING_TOP + leftPositions.start * LINE_HEIGHT - leftScroll;
-    leftEndY = PADDING_TOP + (leftPositions.end + 1) * LINE_HEIGHT - leftScroll;
-    rightStartY = PADDING_TOP + rightPositions.start * LINE_HEIGHT - rightScroll;
-    rightEndY = PADDING_TOP + (rightPositions.end + 1) * LINE_HEIGHT - rightScroll;
+    leftStartY = getOffset(leftOffsets, leftPositions.start) - leftScroll;
+    leftEndY = getOffset(leftOffsets, leftPositions.end + 1) - leftScroll;
+    rightStartY = getOffset(rightOffsets, rightPositions.start) - rightScroll;
+    rightEndY = getOffset(rightOffsets, rightPositions.end + 1) - rightScroll;
   }
 
   const minY = Math.min(leftStartY, rightStartY);

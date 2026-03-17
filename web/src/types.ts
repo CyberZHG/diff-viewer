@@ -73,6 +73,8 @@ export interface State {
   rightActiveTabId: string;
   isScrolling: boolean;
   lastFocusedSide: 'left' | 'right';
+  leftLineOffsets: number[] | null;
+  rightLineOffsets: number[] | null;
 }
 
 export interface ConnectorBlock {
