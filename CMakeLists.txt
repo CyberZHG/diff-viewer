@@ -109,5 +109,6 @@ if(DIFF_VIEW_BIND_ES)
             "-sEXPORT_ES6=1"
             "-sEXPORT_NAME=DIFF_VIEWWASMModule"
             "-sNO_DISABLE_EXCEPTION_CATCHING"
+            "-sALLOW_MEMORY_GROWTH=1"
     )
 endif()
